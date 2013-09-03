@@ -6,6 +6,7 @@ import django.core.files
 from django.contrib.admin import helpers, site
 from django.contrib.auth.models import User, Group
 from django.http import HttpRequest
+from django.utils.html import escape
 from filer.models.filemodels import File
 from filer.models.foldermodels import Folder, FolderPermission
 from filer.models.imagemodels import Image
@@ -476,23 +477,37 @@ class PermissionAdminTest(TestCase):
             self.folder_permission2,
             self.folder_permission3,
         ]
+        all_folders = [
+            self.folder1,
+            self.folder2,
+            self.folder3,
+        ]
         self.users = {
             self.user1: {
                 'folderpermissions': [
                     self.folder_permission1,
                     self.folder_permission3,
+                ],
+                'folders': [
+                    self.folder1,
+                    self.folder3
                 ]
             },
             self.user2: {
                 'folderpermissions': [],
+                'folders': [],
             },
             self.user3: {
                 'folderpermissions': [
                     self.folder_permission2,
-                ]
+                ],
+                'folders': [
+                    self.folder2,
+                ],
             },
             self.superuser: {
                 'folderpermissions': all_folderpermissions,
+                'folders': all_folders,
             }
         }
 
@@ -502,7 +517,8 @@ class PermissionAdminTest(TestCase):
         self.assert_user_folder_permission_qs(user, qs)
 
     def assert_user_folder_permission_qs(self, user, qs):
-        self.assertItemsEqual(qs, self.users[user]['folderpermissions'])
+        user_permission_qs = self.users[user]['folderpermissions']
+        self.assertItemsEqual(qs, user_permission_qs)
 
     def assert_user_adminview(self, user):
         self.client.login(username=user, password='secret')
@@ -539,3 +555,21 @@ class PermissionAdminTest(TestCase):
     def test_admin_view(self):
         for user in self.users.keys():
             self.assert_user_adminview(user)
+
+    def test_user_cannot_add_permission_on_unowned_folder(self):
+        self.client.login(username=self.user2.username, password='secret')
+        response = self.client.post(
+            reverse('admin:filer_folderpermission_add'), {
+                'type': 1,
+                'folder': self.folder2.pk,
+                'user': self.user2.pk,
+                'can_edit': 1,
+                'can_read': 1,
+                'can_add_children': 1,
+            }
+        )
+        self.assertContains(
+            response,
+            escape("You cannot set permissions on folders you don't own."),
+        )
+        self.client.logout()
