@@ -369,9 +369,10 @@ class FolderPermission(models.Model):
             raise ValidationError('User or group cannot be selected together with "everybody".')
         if not self.user and not self.group and not self.everybody:
             raise ValidationError('At least one of user, group, or "everybody" has to be selected.')
+        if self.folder.owner is not self.user:
+            raise ValidationError("You cannot set permissions on folders you don't own.")
 
     class Meta:
         verbose_name = _('folder permission')
         verbose_name_plural = _('folder permissions')
         app_label = 'filer'
-
