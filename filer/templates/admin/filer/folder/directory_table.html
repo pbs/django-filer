@@ -20,13 +20,13 @@
             <tr class="{% cycle rowcolors %}">
                 <td>{% if select_folder and item.file_type == 'Folder' %}<a class="insertlink insertlinkButton" href="" onclick="opener.dismissRelatedFolderLookupPopup(window, {{ subfolder.id }}, '{{ subfolder.quoted_logical_path }}'); return false;" >&nbsp;</a>{% else %}{% if action_form and item.pk and not is_popup %}<input type="checkbox" class="action-select" value="folder-{{ item.pk }}" name="_selected_action" />{% endif %}{% endif %}</td>
                 <!-- DirIcon -->
-                <td><a href="{{ subfolder.get_admin_directory_listing_url_path }}{% if is_popup %}?_popup=1{% if select_folder %}&select_folder=1{% endif %}{% endif %}" title="{% blocktrans with subfolder.name as item_label %}Change '{{ item_label }}' folder details{% endblocktrans %}"><img src="{{ subfolder.icons.32 }}" alt="{% trans "Folder Icon" %}" /></a></td>
+                <td><a href="{{ subfolder.get_admin_directory_listing_url_path }}{% if is_popup %}?_popup=1{% if cropduster_url %}&size_set_id={{size_set}}{% endif %}{% if select_folder %}&select_folder=1{% endif %}{% endif %}" title="{% blocktrans with subfolder.name as item_label %}Change '{{ item_label }}' folder details{% endblocktrans %}"><img src="{{ subfolder.icons.32 }}" alt="{% trans "Folder Icon" %}" /></a></td>
                 <!-- Directory details -->
                 <td>
                     {% if item.file_type == 'Folder' %}
                         <a style="display: block; float: right;" class="changelink" href="{{ subfolder.get_admin_url_path }}{% if is_popup %}?_popup=1{% if select_folder %}&select_folder=1{% endif %}{% endif %}" title="{% blocktrans with subfolder.name as item_label %}Change '{{ item_label }}' folder details{% endblocktrans %}">{% trans "Change" %}</a>
                     {% endif %}
-                    <div><b><a href="{{ subfolder.get_admin_directory_listing_url_path }}{% if is_popup %}?_popup=1{% if select_folder %}&select_folder=1{% endif %}{% endif %}" title="{% blocktrans with subfolder.name as item_label %}Change '{{ item_label }}' folder details{% endblocktrans %}">{{ subfolder.name }}</a></b>{% if not subfolder.is_root %}<span class="tiny"> ({% blocktrans count subfolder.children_count as counter %}1 folder{% plural %}{{ counter }} folders{% endblocktrans %}, {% blocktrans count subfolder.file_count as counter %}1 file{% plural %}{{ counter }} files{% endblocktrans %})</span>{% endif %}</div>
+                    <div><b><a href="{{ subfolder.get_admin_directory_listing_url_path }}{% if is_popup %}?_popup=1{% if cropduster_url %}&size_set_id={{size_set}}{% endif %}{% if select_folder %}&select_folder=1{% endif %}{% endif %}" title="{% blocktrans with subfolder.name as item_label %}Change '{{ item_label }}' folder details{% endblocktrans %}">{{ subfolder.name }}</a></b>{% if not subfolder.is_root %}<span class="tiny"> ({% blocktrans count subfolder.children_count as counter %}1 folder{% plural %}{{ counter }} folders{% endblocktrans %}, {% blocktrans count subfolder.file_count as counter %}1 file{% plural %}{{ counter }} files{% endblocktrans %})</span>{% endif %}</div>
                     <div>{% trans "Owner" %}: {{ subfolder.owner|default:"n/a" }}</div>
                 </td>
                 <td></td>
@@ -34,7 +34,7 @@
             {% endwith %}{% endif %}
             {% if item.file_type == 'File' or item.file_type == 'Image' or item.file_type == 'Archive' %}{% with item as file %}
             <tr class="{% cycle rowcolors %}">
-                <td>{% if is_popup and not select_folder %}<a class="insertlink insertlinkButton" href="" onclick="opener.dismissRelatedImageLookupPopup(window, {{ file.id }}, '{{ file.icons.32|escapejs }}', '{{ file.label|escapejs }}'); return false;" title="{% trans "Select this file" %}">&nbsp;</a>{% else %}{% if action_form and not is_popup %}<input type="checkbox" class="action-select" value="file-{{ item.pk }}" name="_selected_action" />{% endif %}{% endif %}</td>
+                <td>{% if is_popup and not select_folder %}<a class="insertlink insertlinkButton" href="javascript:void(0)" onclick="cropdusterCheckAndDismiss(window, '{{ cropduster_url }}', '{{ size_set }}', {{ file.id }}, '{{ file.icons.32|escapejs }}', '{{ file.label|escapejs }}');" title="{% trans "Select this file" %}">&nbsp;</a>{% else %}{% if action_form and not is_popup %}<input type="checkbox" class="action-select" value="file-{{ item.pk }}" name="_selected_action" />{% endif %}{% endif %}</td>
                 <!-- FileIcon -->
                 <td><a href="{{ file.get_admin_url_path }}" title="{% blocktrans with file.label as item_label %}Change '{{ item_label }}' details{% endblocktrans %}"><img src="{% if file.icons.32 %}{{ file.icons.32 }}{% else %}{% filer_staticmedia_prefix %}icons/missingfile_48x48.png{% endif %}" alt="{{ file.default_alt_text }}" /></a></td>
                 <!-- Filename/Dimensions -->
@@ -62,7 +62,7 @@
     </table>
     <p class="paginator">
         {% if paginated_items.has_previous %}
-            <a href="?page={{ paginated_items.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if is_popup %}&_popup=1{% if select_folder %}&select_folder=1{% endif %}{% endif %}">{% trans "previous" %}</a>
+            <a href="?page={{ paginated_items.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if is_popup %}&_popup=1{% if cropduster_url %}&size_set_id={{size_set}}{% endif %}{% if select_folder %}&select_folder=1{% endif %}{% endif %}">{% trans "previous" %}</a>
         {% endif %}
 
         <span class="this-page">

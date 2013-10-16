@@ -42,6 +42,7 @@ import urllib
 import os
 import itertools
 import inspect
+from django.core.urlresolvers import reverse, NoReverseMatch
 
 
 class AddFolderPopupForm(forms.ModelForm):
@@ -390,6 +391,12 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
             paginated_items = paginator.page(page)
         except (EmptyPage, InvalidPage):
             paginated_items = paginator.page(paginator.num_pages)
+
+        size_set = request.GET.get('size_set_id', None)
+        try:
+            cropduster_url = reverse('cropduster-upload')
+        except NoReverseMatch:
+            cropduster_url = ''
         return render_to_response(
             'admin/filer/folder/directory_listing.html',
             {
@@ -418,7 +425,9 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
                 'selection_note': _('0 of %(cnt)s selected') % {'cnt': len(paginated_items.object_list)},
                 'selection_note_all': selection_note_all % {'total_count': paginator.count},
                 'media': self.media,
-                'enable_permissions': settings.FILER_ENABLE_PERMISSIONS
+                'enable_permissions': settings.FILER_ENABLE_PERMISSIONS,
+                'cropduster_url': cropduster_url,
+                'size_set': size_set
         }, context_instance=RequestContext(request))
 
     def response_action(self, request, files_queryset, folders_queryset):
