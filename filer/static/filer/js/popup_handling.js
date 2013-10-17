@@ -4,20 +4,14 @@
 		win.close();
 	};
 	cropdusterCheckAndDismiss = function(win, cropduster_url, size_set, chosenId, chosenThumbnailUrl, chosenDescriptionTxt){
-		if (cropduster_url) {
-		    $.ajax({url: cropduster_url + '?size_set=' + size_set,
-                            type: 'POST',
-                    	    data: {image: chosenId, size_set_id: size_set, next_stage: 'crop_images'},
-			    success: function (html){
-                                win.close();
-                                var new_win = window.open('', '', 'height=500,width=800,resizable=yes,scrollbars=yes');
-                                new_win.document.write(html);
-                                new_win.focus();
-                            }
-                           });
+		if (cropduster_url && size_set) {
+                    var url = cropduster_url + "?pop=1&size_set=" + size_set + "&next_stage=crop_images&image=" + chosenId;
+                    var new_win = window.open(url, '', 'height=500,width=800,resizable=yes,scrollbars=yes');
+                    new_win.dismissRelatedImageLookupPopup = opener.dismissRelatedImageLookupPopup;
+                    new_win.focus();
+                    win.close();
 		} else {
                         opener.dismissRelatedImageLookupPopup(win, chosenId, chosenThumbnailUrl, chosenDescriptionTxt);
-                        return false;
                 }
             return false;
         };

@@ -392,7 +392,9 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
         except (EmptyPage, InvalidPage):
             paginated_items = paginator.page(paginator.num_pages)
 
-        size_set = request.GET.get('size_set_id', None)
+        size_set = request.session.setdefault('size_set_id',
+                                   request.GET.get('size_set_id', ''))
+
         try:
             cropduster_url = reverse('cropduster-upload')
         except NoReverseMatch:
