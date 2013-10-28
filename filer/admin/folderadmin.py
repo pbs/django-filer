@@ -392,8 +392,17 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
         except (EmptyPage, InvalidPage):
             paginated_items = paginator.page(paginator.num_pages)
 
+        #If the size_set_id was put in the request query params
+        # (see cmsplugin_image/.../image_field.js, function showRelatedObjectLookupPopupImgField),
+        # then together with the selected image, the size_set_id
+        # has to be sent to the cropduster app in popup_handling.js
+        # (cropdusterCheckAndDismiss function) via the response template
+        # of this function (see directory_table.html). The size_set_id is
+        # put in the session because the user might want to browse filer
+        # folders until it reach and select its desired image and I need it
+        # to be kept between requests.
         size_set = ''
-        if (request.GET.get('size_set_id', '') or
+        if ('size_set_id' in request.GET or
             'size_set_id' in request.session):
             size_set = request.session.setdefault('size_set_id',
                                    request.GET.get('size_set_id'))
