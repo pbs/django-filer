@@ -59,7 +59,6 @@ class AdminFileWidget(ForeignKeyRawIdWidget):
             filer_static_prefix += '/'
         context = {
             'hidden_input': hidden_input,
-#            'lookup_url': '%s%s%s' % (related_url, lookup_url, '&size_set_id=1'),
             'lookup_url': '%s%s' % (related_url, lookup_url),
             'thumb_id': css_id_thumbnail_img,
             'span_id': css_id_description_txt,
