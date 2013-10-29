@@ -401,16 +401,19 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
         # put in the session because the user might want to browse filer
         # folders until it reach and select its desired image and I need it
         # to be kept between requests.
+
         size_set = ''
-        if ('size_set_id' in request.GET or
-            'size_set_id' in request.session):
-            size_set = request.session.setdefault('size_set_id',
-                                   request.GET.get('size_set_id'))
+        if 'size_set_id' in request.GET:
+            size_set = request.GET['size_set_id']
+            request.session['size_set_id'] = size_set
+        elif 'size_set_id' in request.session:
+            size_set = request.session['size_set_id']
+
         try:
             cropduster_url = reverse('cropduster-upload')
-
         except NoReverseMatch:
             cropduster_url = ''
+
         return render_to_response(
             'admin/filer/folder/directory_listing.html',
             {
