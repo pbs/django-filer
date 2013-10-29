@@ -32,7 +32,7 @@ def move_file_to_clipboard(request, files, clipboard):
                                       'named %s') % file_obj.actual_name)
             continue
         if clipboard.append_file(file_obj):
-            file_obj .folder = None
+            file_obj.folder = None
             file_obj.save()
             count += 1
     return count
@@ -45,7 +45,7 @@ def move_files_from_clipboard_to_folder(request, clipboard, folder):
 def move_files_to_folder(request, files, folder):
     file_names = [f.actual_name for f in files]
     already_existing = [
-        f.actual_name 
+        f.actual_name
         for f in folder.entries_with_names(file_names)]
     for file_obj in files:
         if file_obj.actual_name in already_existing:

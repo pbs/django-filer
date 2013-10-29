@@ -42,6 +42,7 @@ import urllib
 import os
 import itertools
 import inspect
+from django.core.urlresolvers import reverse, NoReverseMatch
 
 
 class AddFolderPopupForm(forms.ModelForm):
@@ -390,6 +391,29 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
             paginated_items = paginator.page(page)
         except (EmptyPage, InvalidPage):
             paginated_items = paginator.page(paginator.num_pages)
+
+        #If the size_set_id was put in the request query params
+        # (see cmsplugin_image/.../image_field.js, function showRelatedObjectLookupPopupImgField),
+        # then together with the selected image, the size_set_id
+        # has to be sent to the cropduster app in popup_handling.js
+        # (cropdusterCheckAndDismiss function) via the response template
+        # of this function (see directory_table.html). The size_set_id is
+        # put in the session because the user might want to browse filer
+        # folders until it reach and select its desired image and I need it
+        # to be kept between requests.
+
+        size_set = ''
+        if 'size_set_id' in request.GET:
+            size_set = request.GET['size_set_id']
+            request.session['size_set_id'] = size_set
+        elif 'size_set_id' in request.session:
+            size_set = request.session['size_set_id']
+
+        try:
+            cropduster_url = reverse('cropduster-upload')
+        except NoReverseMatch:
+            cropduster_url = ''
+
         return render_to_response(
             'admin/filer/folder/directory_listing.html',
             {
@@ -418,7 +442,9 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
                 'selection_note': _('0 of %(cnt)s selected') % {'cnt': len(paginated_items.object_list)},
                 'selection_note_all': selection_note_all % {'total_count': paginator.count},
                 'media': self.media,
-                'enable_permissions': settings.FILER_ENABLE_PERMISSIONS
+                'enable_permissions': settings.FILER_ENABLE_PERMISSIONS,
+                'cropduster_url': cropduster_url,
+                'size_set': size_set
         }, context_instance=RequestContext(request))
 
     def response_action(self, request, files_queryset, folders_queryset):
