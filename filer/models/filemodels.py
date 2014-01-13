@@ -15,6 +15,8 @@ from django.db.models import Count
 import polymorphic
 import hashlib
 import os
+import bhlog
+import time
 
 
 class FilesChainableQuerySet(object):
@@ -193,6 +195,9 @@ class File(polymorphic.PolymorphicModel, mixins.IconsMixin):
         src_storage.delete(src_file_name)
 
     def _copy_file(self, destination, overwrite=False):
+        start = time.time()
+        import ipdb; ipdb.set_trace()
+
         """
         Copies the file to a destination files and returns it.
         """
@@ -208,13 +213,18 @@ class File(polymorphic.PolymorphicModel, mixins.IconsMixin):
 
         if hasattr(storage, 'copy'):
             storage.copy(src_file_name, destination)
+            bhlog.log_ch_debug("io=({0}) Copied (has .copy) {1} -> {2}".format(
+                time.time() - start, src_file_name, destination))
             return destination
         else:
             # This is needed because most of the remote File Storage backend do not
             # open the file.
             src_file = storage.open(src_file_name)
             src_file.open()
-            return storage.save(destination, ContentFile(src_file.read()))
+            res = storage.save(destination, ContentFile(src_file.read()))
+            bhlog.log_ch_debug("io=({0}) Copied {1} -> {2}".format(
+                time.time() - start, src_file_name, destination))
+            return res
 
     def generate_sha1(self):
         sha = hashlib.sha1()
@@ -315,7 +325,10 @@ class File(polymorphic.PolymorphicModel, mixins.IconsMixin):
                     transaction.commit()
                     # only delete the file on the old_location if all went OK
                     if old_location != new_location:
+                        start = time.time()
                         storage.delete(old_location)
+                        bhlog.log_ch_debug("io=({0}) Deleted {1}".format(
+                            time.time() - start, old_location))
         else:
             copy_and_save()
         return new_location

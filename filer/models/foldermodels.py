@@ -261,6 +261,7 @@ class Folder(models.Model, mixins.IconsMixin):
             # The manual transaction management here breaks the transaction
             #   management from
             #   django.contrib.admin.options.ModelAdmin.change_view
+
             storages = []
             old_locations = []
             new_locations = []
