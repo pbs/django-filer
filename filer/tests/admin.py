@@ -362,7 +362,7 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(self.src_folder.files.count(), 1)
         self.assertEqual(self.dst_folder.files.count(), 0)
         
-    def test_move_files_and_folders_action_physical_file_does_not_exist(self):
+    def _move_files_and_folders_action_physical_file_does_not_exist(self, is_image=False):
         # set up
         # create folders
         site = Site.objects.get(id=1)
@@ -372,7 +372,10 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(dest_folder.files.count(), 0)
         
         # create file
-        file_to_move = create_file(source_folder, 'some_file_to_move')
+        if is_image:
+            file_to_move = self.create_image(source_folder, 'some_image_to_move')
+        else:
+            file_to_move = create_file(source_folder, 'some_file_to_move')
         self.assertEqual(source_folder.files.count(), 1)
         
         # remove the physical file
@@ -388,7 +391,12 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(self.dst_folder.files.count(), 0)
         
         file_to_move.delete(to_trash=False)
-
+        
+    def test_move_files_and_folders_action_physical_file_does_not_exist(self):
+        self._move_files_and_folders_action_physical_file_does_not_exist()
+        
+    def test_move_files_and_folders_action_physical_image_does_not_exist(self):
+        self._move_files_and_folders_action_physical_file_does_not_exist(is_image=True)
 
     def test_validate_no_duplicate_folders_on_move(self):
         """ move file from foo to bar
@@ -468,13 +476,16 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(clipboard.files.count(), 0)
         self.assertEqual(self.src_folder.files.count(), 1)
         
-    def test_move_to_clipboard_action_physical_file_does_not_exist(self):
+    def _move_to_clipboard_action_physical_file_does_not_exist(self, is_image=False):
         # create source folder and file
         site = Site.objects.get(id=1)
         source_folder = self.create_folder(name="SourceFolder", parent=None, site=site)
         self.assertEqual(source_folder.files.count(), 0)
         
-        file_to_move = create_file(source_folder, 'some_file_to_move')
+        if is_image:
+            file_to_move = self.create_image(source_folder, 'some_image_to_move')
+        else:
+            file_to_move = create_file(source_folder, 'some_file_to_move')
         self.assertEqual(source_folder.files.count(), 1)
         
         # remove the physical file
@@ -493,6 +504,12 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(source_folder.files.count(), 1)
         
         file_to_move.delete(to_trash=False)
+        
+    def test_move_to_clipboard_action_physical_file_does_not_exist(self):
+        self._move_to_clipboard_action_physical_file_does_not_exist()
+        
+    def test_move_to_clipboard_action_physical_image_does_not_exist(self):
+        self._move_to_clipboard_action_physical_file_does_not_exist(is_image=True)
 
     def test_files_set_public_action(self):
         return
@@ -546,7 +563,7 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertTrue(os.path.exists(
             File.objects.get(id=self.image_obj.id).file.path))
         
-    def test_copy_files_and_folders_action_physical_file_does_not_exist(self):
+    def _copy_files_and_folders_action_physical_file_does_not_exist(self, is_image=False):
         # create source, destination folders and file to copy 
         site = Site.objects.get(id=1)
         source_folder = self.create_folder(name="SourceFolder", parent=None, site=site)
@@ -554,7 +571,10 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(source_folder.files.count(), 0)
         self.assertEqual(dest_folder.files.count(), 0)
         
-        file_to_copy = create_file(source_folder, 'some_file_to_copy')
+        if is_image:
+            file_to_copy = self.create_image(source_folder, 'some_image_to_copy')
+        else:
+            file_to_copy = create_file(source_folder, 'some_file_to_copy')
         self.assertEqual(source_folder.files.count(), 1)
         
         # remove the physical file
@@ -576,6 +596,12 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(dest_folder.files.count(), 0)
         
         file_to_copy.delete(to_trash=False)
+        
+    def test_copy_files_and_folders_action_physical_file_does_not_exist(self):
+       self._copy_files_and_folders_action_physical_file_does_not_exist()
+        
+    def test_copy_files_and_folders_action_physical_image_does_not_exist(self):
+       self._copy_files_and_folders_action_physical_file_does_not_exist(is_image=True)
         
     def test_copy_recursion_error(self):
         ## it's enough to try to move/copy to itself with no error
