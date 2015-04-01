@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.utils.translation import ugettext as _
 
 from filer.models import Clipboard
+from filer.utils.files import physical_file_exists
 
 
 def discard_clipboard(clipboard):
@@ -30,6 +31,11 @@ def move_file_to_clipboard(request, files, clipboard):
         f.actual_name
         for f in clipboard.files.all() if f.actual_name in file_names]
     for file_obj in files:
+        if not physical_file_exists(file_obj.file):
+            messages.error(request, _(u'%s can not be moved to clipboard because '
+                                      u'the physical file does not exist')
+                                    % file_obj.actual_name)
+            continue
         if file_obj.actual_name in already_existing:
             messages.error(request, _(u'Clipboard already contains a file '
                                       'named %s') % file_obj.actual_name)

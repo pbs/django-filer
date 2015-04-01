@@ -5,11 +5,14 @@ from django.template.defaultfilters import slugify
 from django.core.files.uploadedfile import SimpleUploadedFile
 from filer.settings import FILER_FILE_MODELS
 from filer.utils.loader import load_object
+import os.path
 
 class UploadException(Exception):
     pass
 
-
+def physical_file_exists(file_obj):
+    return os.path.exists(file_obj.path)
+    
 def handle_upload(request):
     if not request.method == "POST":
         raise UploadException("AJAX request not valid: must be POST")

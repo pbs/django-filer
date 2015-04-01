@@ -27,6 +27,7 @@ from filer.tests.helpers import (
 )
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
+from filer.utils.files import physical_file_exists
 from filer.utils.generate_filename import by_path
 from cmsroles.models import Role
 from cmsroles.tests.tests import HelpersMixin
@@ -311,10 +312,13 @@ class BulkOperationsMixin(object):
 
     def create_src_and_dst_folders(self):
         site = Site.objects.get(id=1)
-        self.src_folder = Folder(name="Src", parent=None, site=site)
-        self.src_folder.save()
-        self.dst_folder = Folder(name="Dst", parent=None, site=site)
-        self.dst_folder.save()
+        self.src_folder = self.create_folder(name="Src", parent=None, site=site)
+        self.dst_folder = self.create_folder(name="Dst", parent=None, site=site)
+        
+    def create_folder(self, name, parent, site):
+        folder = Folder(name=name, parent=parent, site=site)
+        folder.save()
+        return folder
 
     def create_image(self, folder, filename=None):
         filename = filename or 'test_image.jpg'
@@ -326,13 +330,17 @@ class BulkOperationsMixin(object):
         return image_obj
 
     def create_file(self, folder, filename=None):
-        filename = filename or 'test_file.dat'
-        file_data = dj_files.base.ContentFile('some data')
-        file_data.name = filename
-        file_obj = File.objects.create(owner=self.superuser,
-            original_filename=filename, file=file_data, folder=folder)
-        file_obj.save()
-        return file_obj
+        return create_file(folder, filename, self.superuser)
+
+
+def create_file(folder, filename=None, owner=None):
+    filename = filename or 'test_file.dat'
+    file_data = dj_files.base.ContentFile('some data')
+    file_data.name = filename
+    file_obj = File.objects.create(owner=owner,
+        original_filename=filename, file=file_data, folder=folder)
+    file_obj.save()
+    return file_obj
 
 
 @SettingsOverride(filer_settings,
@@ -353,6 +361,34 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
             self.client, self.dst_folder, self.src_folder, [self.image_obj])
         self.assertEqual(self.src_folder.files.count(), 1)
         self.assertEqual(self.dst_folder.files.count(), 0)
+        
+    def test_move_files_and_folders_action_physical_file_does_not_exist(self):
+        # set up
+        # create folders
+        site = Site.objects.get(id=1)
+        source_folder = self.create_folder(name="SourceFolder", parent=None, site=site)
+        dest_folder = self.create_folder(name="DestinationFolder", parent=None, site=site)
+        self.assertEqual(source_folder.files.count(), 0)
+        self.assertEqual(dest_folder.files.count(), 0)
+        
+        # create file
+        file_to_move = create_file(source_folder, 'some_file_to_move')
+        self.assertEqual(source_folder.files.count(), 1)
+        
+        # remove the physical file
+        os.remove(file_to_move.file.path)
+        self.assertFalse(physical_file_exists(file_to_move.file))
+        
+        # execute action
+        response, _ = move_action(
+            self.client, source_folder, dest_folder, [file_to_move])
+        
+        # verify that file is still in source folder and not in destination folder
+        self.assertEqual(self.src_folder.files.count(), 1)
+        self.assertEqual(self.dst_folder.files.count(), 0)
+        
+        file_to_move.delete(to_trash=False)
+
 
     def test_validate_no_duplicate_folders_on_move(self):
         """ move file from foo to bar
@@ -431,6 +467,32 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         tools.discard_clipboard(clipboard)
         self.assertEqual(clipboard.files.count(), 0)
         self.assertEqual(self.src_folder.files.count(), 1)
+        
+    def test_move_to_clipboard_action_physical_file_does_not_exist(self):
+        # create source folder and file
+        site = Site.objects.get(id=1)
+        source_folder = self.create_folder(name="SourceFolder", parent=None, site=site)
+        self.assertEqual(source_folder.files.count(), 0)
+        
+        file_to_move = create_file(source_folder, 'some_file_to_move')
+        self.assertEqual(source_folder.files.count(), 1)
+        
+        # remove the physical file
+        os.remove(file_to_move.file.path)
+        self.assertFalse(physical_file_exists(file_to_move.file))
+        
+        # execute action
+        response = move_to_clipboard_action(
+            self.client, source_folder, [file_to_move])
+        
+        # verify that the file was not moved to clipboard
+        clipboard = Clipboard.objects.get(user=self.superuser)
+        self.assertEqual(clipboard.files.count(), 0)
+        tools.discard_clipboard(clipboard)
+        # and is still in source folder
+        self.assertEqual(source_folder.files.count(), 1)
+        
+        file_to_move.delete(to_trash=False)
 
     def test_files_set_public_action(self):
         return
@@ -483,7 +545,38 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
             File.objects.get(id=dst_image_obj.id).file.path))
         self.assertTrue(os.path.exists(
             File.objects.get(id=self.image_obj.id).file.path))
-
+        
+    def test_copy_files_and_folders_action_physical_file_does_not_exist(self):
+        # create source, destination folders and file to copy 
+        site = Site.objects.get(id=1)
+        source_folder = self.create_folder(name="SourceFolder", parent=None, site=site)
+        dest_folder = self.create_folder(name="DestinationFolder", parent=None, site=site)
+        self.assertEqual(source_folder.files.count(), 0)
+        self.assertEqual(dest_folder.files.count(), 0)
+        
+        file_to_copy = create_file(source_folder, 'some_file_to_copy')
+        self.assertEqual(source_folder.files.count(), 1)
+        
+        # remove the physical file
+        os.remove(file_to_copy.file.path)
+        self.assertFalse(physical_file_exists(file_to_copy.file))
+        
+        # execute copy action
+        url = get_dir_listing_url(source_folder)
+        response = self.client.post(url, {
+            'action': 'copy_files_and_folders',
+            'post': 'yes',
+            'suffix': 'test',
+            'destination': dest_folder.id,
+            helpers.ACTION_CHECKBOX_NAME: 'file-%d' % (file_to_copy.id,),
+        })
+        
+        # verify that the file was not copied to destination folder
+        self.assertEqual(source_folder.files.count(), 1)
+        self.assertEqual(dest_folder.files.count(), 0)
+        
+        file_to_copy.delete(to_trash=False)
+        
     def test_copy_recursion_error(self):
         ## it's enough to try to move/copy to itself with no error
         ## this means the operation error is caught
@@ -807,9 +900,7 @@ class BaseTestFolderTypePermissionLayer(object):
         return clipboard.files
 
     def test_move_to_clipboard_from_root(self):
-        file_foo = File.objects.create(
-            original_filename='foo', folder=None,
-            file=dj_files.base.ContentFile('some data'))
+        file_foo = create_file(folder=None, filename='foo')
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -817,9 +908,7 @@ class BaseTestFolderTypePermissionLayer(object):
         self.assertEqual(
             self._get_clipboard_files().count(), 1)
 
-        file_bar = File.objects.create(
-            original_filename='bar', folder=None,
-            file=dj_files.base.ContentFile('some data'))
+        file_bar = create_file(folder=None, filename='bar')
         move_single_file_to_clipboard_action(
             self.client, 'unfiled', [file_bar])
         self.assertEqual(
@@ -827,9 +916,7 @@ class BaseTestFolderTypePermissionLayer(object):
 
     def test_move_to_clipboard_from_site_folders(self):
         foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
-        file_foo = File.objects.create(
-            original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+        file_foo = create_file(foo, 'foo')
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -837,16 +924,12 @@ class BaseTestFolderTypePermissionLayer(object):
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
-        file_bar = File.objects.create(
-            original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+        file_bar = create_file(foo, 'bar')
         move_to_clipboard_action(self.client, foo, [file_bar])
         self.assertEqual(
             self._get_clipboard_files().count(), 1)
-
-        file_baz = File.objects.create(
-            original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+        
+        file_baz = create_file(foo, 'baz')
         move_single_file_to_clipboard_action(
             self.client, foo, [file_baz])
         self.assertEqual(
@@ -1009,11 +1092,9 @@ class BaseTestFolderTypePermissionLayer(object):
         assert foo_destinations[valid_destination.id]['unselectable'] == False
 
     def test_move_from_unfiled(self):
-        foo_file = File.objects.create(
-            original_filename='foo_file',
-            file=dj_files.base.ContentFile('some data'))
         bar = Folder.objects.create(
             name='bar', site=Site.objects.get(id=1))
+        foo_file = create_file(bar, 'foo_file.dat')
         response, url = move_action(self.client, 'unfiled', bar, [foo_file])
         self.assertEqual(File.objects.filter(folder=bar).count(), 1)
         self.assertEqual(File.objects.filter(folder__isnull=True).count(), 0)
@@ -1236,9 +1317,7 @@ class TestFolderTypePermissionLayerForRegularUser(
 
     def test_move_to_clipboard_from_site_folders(self):
         foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
-        file_foo = File.objects.create(
-            original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+        file_foo  = create_file(foo, 'foo')
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -1246,16 +1325,12 @@ class TestFolderTypePermissionLayerForRegularUser(
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
-        file_bar = File.objects.create(
-            original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+        file_bar = create_file(foo, 'bar')
         move_to_clipboard_action(self.client, foo, [file_bar])
         self.assertEqual(
             self._get_clipboard_files().count(), 1)
 
-        file_baz = File.objects.create(
-            original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+        file_baz = create_file(foo, 'baz')
         move_single_file_to_clipboard_action(
             self.client, foo, [file_baz])
         self.assertEqual(

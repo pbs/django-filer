@@ -25,6 +25,7 @@ from filer import settings
 from filer.admin.forms import (CopyFilesAndFoldersForm, ResizeImagesForm,
                                RenameFilesForm)
 from filer.admin.common_admin import FolderPermissionModelAdmin
+from filer.utils.files import physical_file_exists
 from filer.views import (popup_status, popup_param, selectfolder_status,
                          selectfolder_param, current_site_param)
 from filer.admin.tools import (folders_available, files_available,
@@ -745,15 +746,27 @@ class FolderAdmin(FolderPermissionModelAdmin):
                                 for f in sorted(files_queryset)])
         return to_copy_or_move
 
-    def _move_files_and_folders_impl(self, files_queryset, folders_queryset,
+    def _move_files_and_folders_impl(self, request, files_queryset, folders_queryset,
                                      destination):
+        moved_files_and_folders = 0
         for f in files_queryset:
+            if not physical_file_exists(f.file):
+                messages.error(request, _(u'%s can not be moved '
+                                          u'because the physical file does not exist'
+                                                  % f.actual_name))
+                continue
             f.folder = destination
             f.save()
+            moved_files_and_folders += 1
         for f_id in folders_queryset.values_list('id', flat=True):
             f = Folder.objects.get(id=f_id)
+            # if not physical_file_or_folder_exists(f.file.path):
+            #     messages.error(request, _(u'The folder %s does not exist on the filesystem '
+            #                                       % f.actual_name))
+            #     continue
             f.parent = destination
             f.save()
+            moved_files_and_folders += 1
 
     def _as_folder(self, request_data, param):
         try:
@@ -884,14 +897,15 @@ class FolderAdmin(FolderPermissionModelAdmin):
             # We count only topmost files and folders here
             n = selected_files.count() + selected_folders.count()
             if n:
-                self._move_files_and_folders_impl(
+                moved_files = self._move_files_and_folders_impl(request,
                     selected_files, selected_folders, destination)
-                self.message_user(request,
-                     _("Successfully moved %(count)d files and/or "
-                       "folders to folder '%(destination)s'.") % {
-                            "count": n,
-                            "destination": destination,
-                        })
+                if moved_files:
+                    self.message_user(request,
+                         _("Successfully moved %(count)d files and/or "
+                           "folders to folder '%(destination)s'.") % {
+                                "count": n,
+                                "destination": destination,
+                            })
             return None
 
         context = {
@@ -989,12 +1003,19 @@ class FolderAdmin(FolderPermissionModelAdmin):
         file_obj.file = file_obj._copy_file(new_path)
         file_obj.save()
 
-    def _copy_files(self, files, destination, suffix, overwrite):
+    def _copy_files(self, request, files, destination, suffix, overwrite):
+        copied_files = 0
         for f in files:
+            if not physical_file_exists(f.file):
+                messages.error(request, _(u'%s can not be copied '
+                                          u'because the physical file does not exist') 
+                               % f.actual_name)
+                continue
             self._copy_file(f, destination, suffix, overwrite)
-        return len(files)
+            copied_files += 1
+        return copied_files
 
-    def _copy_folder(self, folder, destination, suffix, overwrite):
+    def _copy_folder(self, request, folder, destination, suffix, overwrite):
         if overwrite:
             # Not yet implemented as we have to find a portable
             #   (for different storage backends) way to overwrite files
@@ -1013,19 +1034,23 @@ class FolderAdmin(FolderPermissionModelAdmin):
         folder.parent = destination
         folder.save()
 
-        return 1 + self._copy_files_and_folders_impl(
+        return 1 + self._copy_files_and_folders_impl(request,
             old_folder.files.all(), old_folder.children.all(),
             folder, suffix, overwrite)
 
-    def _copy_files_and_folders_impl(self, files_queryset, folders_queryset,
+    def _copy_files_and_folders_impl(self, request, files_queryset, folders_queryset,
                                      destination, suffix, overwrite):
 
-        n = self._copy_files(files_queryset, destination, suffix, overwrite)
+        n = self._copy_files(request, files_queryset, destination, suffix, overwrite)
 
         for f_id in folders_queryset.values_list('id', flat=True):
             f = Folder.objects.get(id=f_id)
+            # if not physical_file_or_folder_exists(f.file.url):
+            #     messages.error(request, _(u'The folder %s does not exist') 
+            #                    % f.actual_name)
+            #     continue
             destination = Folder.objects.get(id=destination.id)
-            n += self._copy_folder(f, destination, suffix, overwrite)
+            n += self._copy_folder(request, f, destination, suffix, overwrite)
 
         return n
 
@@ -1078,15 +1103,16 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
                 if files_queryset.count() + folders_queryset.count():
                     # We count all files and folders here (recursivelly)
-                    n = self._copy_files_and_folders_impl(
+                    n = self._copy_files_and_folders_impl(request,
                         files_queryset, folders_queryset, destination,
                         suffix, False)
-                    self.message_user(request,
-                        _("Successfully copied %(count)d files and/or "
-                          "folders to folder '%(destination)s'.") % {
-                                "count": n,
-                                "destination": destination,
-                            })
+                    if n:
+                        self.message_user(request,
+                            _("Successfully copied %(count)d files and/or "
+                              "folders to folder '%(destination)s'.") % {
+                                    "count": n,
+                                    "destination": destination,
+                                })
                 return None
         else:
             form = CopyFilesAndFoldersForm()
