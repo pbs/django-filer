@@ -25,7 +25,7 @@ from filer import settings
 from filer.admin.forms import (CopyFilesAndFoldersForm, ResizeImagesForm,
                                RenameFilesForm)
 from filer.admin.common_admin import FolderPermissionModelAdmin
-from filer.utils.files import physical_file_exists
+from filer.utils.files import file_exists_on_filesystem
 from filer.views import (popup_status, popup_param, selectfolder_status,
                          selectfolder_param, current_site_param)
 from filer.admin.tools import (folders_available, files_available,
@@ -750,7 +750,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                                      destination):
         moved_files_and_folders = 0
         for f in files_queryset:
-            if not physical_file_exists(f.file):
+            if not file_exists_on_filesystem(f.file):
                 messages.error(request, _(u'%s can not be moved because the '
                                           u'file does not exist on the filesystem'
                                                   % f.actual_name))
@@ -763,6 +763,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
             f.parent = destination
             f.save()
             moved_files_and_folders += 1
+            
+        return moved_files_and_folders
 
     def _as_folder(self, request_data, param):
         try:
@@ -1002,7 +1004,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
     def _copy_files(self, request, files, destination, suffix, overwrite):
         copied_files = 0
         for f in files:
-            if not physical_file_exists(f.file):
+            if not file_exists_on_filesystem(f.file):
                 messages.error(request, _(u'%s can not be copied because the '
                                           u'file does not exist on the filesystem') 
                                % f.actual_name)

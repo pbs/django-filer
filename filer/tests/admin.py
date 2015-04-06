@@ -27,7 +27,7 @@ from filer.tests.helpers import (
 )
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
-from filer.utils.files import physical_file_exists
+from filer.utils.files import file_exists_on_filesystem
 from filer.utils.generate_filename import by_path
 from cmsroles.models import Role
 from cmsroles.tests.tests import HelpersMixin
@@ -380,7 +380,7 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         
         # remove the physical file
         os.remove(file_to_move.file.path)
-        self.assertFalse(physical_file_exists(file_to_move.file))
+        self.assertFalse(file_exists_on_filesystem(file_to_move.file))
         
         # execute action
         response, _ = move_action(
@@ -490,7 +490,7 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         
         # remove the physical file
         os.remove(file_to_move.file.path)
-        self.assertFalse(physical_file_exists(file_to_move.file))
+        self.assertFalse(file_exists_on_filesystem(file_to_move.file))
         
         # execute action
         response = move_to_clipboard_action(
@@ -579,7 +579,7 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         
         # remove the physical file
         os.remove(file_to_copy.file.path)
-        self.assertFalse(physical_file_exists(file_to_copy.file))
+        self.assertFalse(file_exists_on_filesystem(file_to_copy.file))
         
         # execute copy action
         url = get_dir_listing_url(source_folder)

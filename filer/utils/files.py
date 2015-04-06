@@ -10,7 +10,7 @@ import os.path
 class UploadException(Exception):
     pass
 
-def physical_file_exists(file_obj):
+def file_exists_on_filesystem(file_obj):
     return os.path.exists(file_obj.path)
     
 def handle_upload(request):
