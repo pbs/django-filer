@@ -751,8 +751,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
         moved_files_and_folders = 0
         for f in files_queryset:
             if not physical_file_exists(f.file):
-                messages.error(request, _(u'%s can not be moved '
-                                          u'because the physical file does not exist'
+                messages.error(request, _(u'%s can not be moved because the '
+                                          u'file does not exist on the filesystem'
                                                   % f.actual_name))
                 continue
             f.folder = destination
@@ -760,10 +760,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
             moved_files_and_folders += 1
         for f_id in folders_queryset.values_list('id', flat=True):
             f = Folder.objects.get(id=f_id)
-            # if not physical_file_or_folder_exists(f.file.path):
-            #     messages.error(request, _(u'The folder %s does not exist on the filesystem '
-            #                                       % f.actual_name))
-            #     continue
             f.parent = destination
             f.save()
             moved_files_and_folders += 1
@@ -1007,8 +1003,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
         copied_files = 0
         for f in files:
             if not physical_file_exists(f.file):
-                messages.error(request, _(u'%s can not be copied '
-                                          u'because the physical file does not exist') 
+                messages.error(request, _(u'%s can not be copied because the '
+                                          u'file does not exist on the filesystem') 
                                % f.actual_name)
                 continue
             self._copy_file(f, destination, suffix, overwrite)
@@ -1045,10 +1041,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
         for f_id in folders_queryset.values_list('id', flat=True):
             f = Folder.objects.get(id=f_id)
-            # if not physical_file_or_folder_exists(f.file.url):
-            #     messages.error(request, _(u'The folder %s does not exist') 
-            #                    % f.actual_name)
-            #     continue
             destination = Folder.objects.get(id=destination.id)
             n += self._copy_folder(request, f, destination, suffix, overwrite)
 

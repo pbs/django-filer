@@ -33,7 +33,7 @@ def move_file_to_clipboard(request, files, clipboard):
     for file_obj in files:
         if not physical_file_exists(file_obj.file):
             messages.error(request, _(u'%s can not be moved to clipboard because '
-                                      u'the physical file does not exist')
+                                      u'the file does not exist on the filesystem')
                                     % file_obj.actual_name)
             continue
         if file_obj.actual_name in already_existing:
