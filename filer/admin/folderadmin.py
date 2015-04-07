@@ -751,8 +751,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
         moved_files_and_folders = 0
         for f in files_queryset:
             if not file_exists_on_filesystem(f.file):
-                messages.error(request, _(u'%s can not be moved because the '
-                                          u'file does not exist on the filesystem'
+                messages.error(request, _(u'%s can not be moved because it '
+                                          u'is missing from storage.'
                                                   % f.actual_name))
                 continue
             f.folder = destination
@@ -1005,8 +1005,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
         copied_files = 0
         for f in files:
             if not file_exists_on_filesystem(f.file):
-                messages.error(request, _(u'%s can not be copied because the '
-                                          u'file does not exist on the filesystem') 
+                messages.error(request, _(u'%s can not be copied because it '
+                                          u'is missing from storage.') 
                                % f.actual_name)
                 continue
             self._copy_file(f, destination, suffix, overwrite)
