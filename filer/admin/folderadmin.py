@@ -567,7 +567,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 _("Successfully moved %(count)d files to clipboard.") % {
                     "count": files_count[0], })
         else:
-            self.message_user(request,
+            messages.warning(request,
                 _("No files were moved to clipboard."))
         return None
 
@@ -901,7 +901,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                     self.message_user(request,
                          _("Successfully moved %(count)d files and/or "
                            "folders to folder '%(destination)s'.") % {
-                                "count": n,
+                                "count": moved_files,
                                 "destination": destination,
                             })
             return None
