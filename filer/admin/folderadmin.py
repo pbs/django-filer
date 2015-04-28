@@ -4,6 +4,7 @@ from django.contrib.admin import helpers
 from django.contrib.admin.util import quote, unquote, capfirst
 from django.contrib import messages
 from django.utils.http import urlquote
+from filer.admin import filer_messages
 from filer.admin.patched.admin_utils import get_deleted_objects
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
@@ -32,7 +33,8 @@ from filer.admin.tools import (folders_available, files_available,
                                has_admin_role_on_site,
                                get_admin_sites_for_user,
                                has_multi_file_action_permission,
-                               is_valid_destination,)
+                               validate_destination, 
+                               validate_multi_file_action_permission)
 from filer.models import (Folder, FolderRoot, UnfiledImages, File, tools,
                           ImagesWithMissingData, Image,
                           Archive)
@@ -337,8 +339,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 if "move-to-clipboard-%d" % (f.id,) in request.POST:
                     if (f.is_readonly_for_user(user) or
                             f.is_restricted_for_user(user)):
-                        raise PermissionDenied
-                    tools.move_file_to_clipboard(request, [f], clipboard)
+                        messages.error(request, 
+                                filer_messages.file_or_folder_is_restricted 
+                                % f.actual_name)
+                    else:
+                        tools.move_file_to_clipboard(request, [f], clipboard)
                     return HttpResponseRedirect(request.get_full_path())
 
         selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
@@ -546,10 +551,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
         if request.method != 'POST':
             return None
 
-        if not has_multi_file_action_permission(
-                request, files_queryset,
-                Folder.objects.get_empty_query_set()):
-            raise PermissionDenied
+        error_message = validate_multi_file_action_permission(request, 
+                files_queryset, Folder.objects.get_empty_query_set())
+        if error_message:
+            messages.error(request, error_message)
+            return None
 
         clipboard = tools.get_user_clipboard(request.user)
         # We define it like that so that we can modify it inside the
@@ -765,14 +771,22 @@ class FolderAdmin(FolderPermissionModelAdmin):
                            selected_folders):
         destination = self._as_folder(request.POST, 'destination')
         if not destination:
-            raise PermissionDenied
+            messages.error(request, filer_messages.destination_not_selected)
+            return None
+        
         # check destination permissions
-        if not is_valid_destination(request, destination):
-            raise PermissionDenied
+        error_message = validate_destination(request, destination)
+        if error_message:
+            messages.error(request, error_message)
+            return None
+        
         # don't allow copy/move from folder to the same folder
         if (hasattr(current_folder, 'pk') and
                 destination.pk == current_folder.pk):
-            raise PermissionDenied
+            messages.error(request, 
+                           filer_messages.destination_is_in_same_folder)
+            return None
+        
         # don't allow selected folders to be copied/moved inside
         #   themselves or inside any of their descendants
         mgr = Folder._tree_manager
@@ -780,7 +794,10 @@ class FolderAdmin(FolderPermissionModelAdmin):
             selected_folders, include_self=True
         ).filter(id=destination.pk).exists()
         if destination_in_selected:
-            raise PermissionDenied
+            messages.error(request, 
+                           filer_messages.destination_in_same_folder_subtree)
+            return None
+            
         return destination
 
     def destination_folders(self, request):
@@ -833,9 +850,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
         opts = self.model._meta
         app_label = opts.app_label
 
-        if not has_multi_file_action_permission(
-                request, selected_files, selected_folders):
-            raise PermissionDenied
+        error_message = validate_multi_file_action_permission(
+                request, selected_files, selected_folders)
+        if error_message:
+            messages.error(request, error_message)
+            return
 
         if selected_folders.filter(parent=None).exists():
             messages.error(request, "To prevent potential problems, users "
@@ -849,9 +868,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
             request, selected_files, selected_folders)
 
         if request.method == 'POST' and request.POST.get('post'):
-            destination = self._clean_destination(
-                request, current_folder, selected_folders)
-
+            destination = self._clean_destination(request, current_folder, 
+                                                  selected_folders)
+            if not destination:
+                return
+            
             # all folders need to belong to the same site as the
             #   destination site folder
             sites_from_folders = \
@@ -985,7 +1006,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 file_obj.original_filename, suffix)
         else:
             file_obj.name = self._generate_name(file_obj.name, suffix)
-        new_path = file_obj.file.field.upload_to(file_obj, file_obj.actual_name)
+        new_path = file_obj.file.field.upload_to(file_obj, 
+                                                 file_obj.actual_name)
         file_obj.file = file_obj._copy_file(new_path)
         file_obj.save()
 
@@ -1070,6 +1092,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
             if form.is_valid():
                 destination = self._clean_destination(
                     request, current_folder, folders_queryset)
+                if not destination:
+                    return None
 
                 suffix = form.cleaned_data['suffix']
                 if not self._are_candidate_names_valid(

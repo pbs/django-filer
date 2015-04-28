@@ -2,6 +2,7 @@
 from PIL import Image, ImageChops, ImageDraw
 
 from django.contrib.auth.models import User, Permission
+from django.http import parse_cookie
 from filer.models.foldermodels import Folder
 from filer.models.clipboardmodels import Clipboard, ClipboardItem
 from django.core.urlresolvers import reverse
@@ -59,13 +60,32 @@ def move_action(client, folder_view, destination, to_move, follow=False):
     objects_to_move = [filer_obj_as_checkox(filer_obj)
                        for filer_obj in to_move]
     url = get_dir_listing_url(folder_view)
+    if not destination:
+        destination_id = None
+    else:
+        destination_id = destination.id
     return client.post(url, {
         'action': 'move_files_and_folders',
         'post': 'yes',
-        'destination': destination.id,
+        'destination': destination_id,
         helpers.ACTION_CHECKBOX_NAME: objects_to_move }, follow=follow), url
 
-
+def copy_action(client, source_folder, destination_folder, 
+                to_copy_collection, suffix='test', follow=False):
+    url = get_dir_listing_url(source_folder)
+    if not destination_folder:
+        destination_id = None
+    else:
+        destination_id = destination_folder.id
+    return client.post(url, {
+            'action': 'copy_files_and_folders',
+            'post': 'yes',
+            'suffix': suffix,
+            'destination': destination_id,
+            helpers.ACTION_CHECKBOX_NAME: map(filer_obj_as_checkox, 
+                                              to_copy_collection),
+        }, follow=follow)
+    
 def create_superuser():
     superuser = User.objects.create_superuser('admin',
                                               'admin@free.fr',
@@ -187,3 +207,14 @@ def get_user_message(response):
         message = [m for m in c.get('messages')][0]
         if message:
             return message
+        
+def get_error_message(response):
+    if not response.cookies:
+        return None
+    parsed_cookie = parse_cookie(response.cookies)
+    if not 'messages' in parsed_cookie:
+        return None
+    msg = parsed_cookie['messages']
+    msg = msg[msg.index('[[') + 2:msg.index(']]')]
+    msgs = msg.split('\"')
+    return msgs[len(msgs) - 2]

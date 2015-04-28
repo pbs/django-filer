@@ -11,6 +11,7 @@ from django.contrib.sites.models import Site
 from django.contrib.auth.models import User, Group, Permission
 from django.http import HttpRequest
 from django.core.files import File as DjangoFile
+from filer.admin import filer_messages
 from filer.models.filemodels import File
 from filer.models.archivemodels import Archive
 from filer.models.foldermodels import Folder
@@ -23,8 +24,8 @@ from filer.tests.helpers import (
     create_image, create_staffuser, create_folder_for_user, move_action,
     move_to_clipboard_action, paste_clipboard_to_folder, get_dir_listing_url,
     filer_obj_as_checkox, get_make_root_folder_url,
-    move_single_file_to_clipboard_action, SettingsOverride
-)
+    move_single_file_to_clipboard_action, SettingsOverride,
+    get_error_message, copy_action)
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
 from filer.utils.generate_filename import by_path
@@ -353,7 +354,64 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
             self.client, self.dst_folder, self.src_folder, [self.image_obj])
         self.assertEqual(self.src_folder.files.count(), 1)
         self.assertEqual(self.dst_folder.files.count(), 0)
-
+        
+    def test_move_files_and_folders_action_no_destination_folder(self):
+        self.assertEqual(self.src_folder.files.count(), 1)
+        response, _ = move_action(
+            self.client, self.src_folder, None, [self.image_obj])
+        message = get_error_message(response)
+        self.assertEqual(filer_messages.destination_not_selected, message)
+        self.assertEqual(self.src_folder.files.count(), 1)
+        
+    def test_move_files_and_folders_action_same_destination_folder(self):
+        self.assertEqual(self.src_folder.files.count(), 1)
+        response, _ = move_action(
+            self.client, self.src_folder, self.src_folder, [self.image_obj])
+        message = get_error_message(response)
+        self.assertEqual(filer_messages.destination_is_in_same_folder, 
+                         message)
+        self.assertEqual(self.src_folder.files.count(), 1)
+        
+    def test_move_files_and_folders_action_destination_inside_source(self):
+        to_move_folder = Folder(name="ToMove", parent=self.src_folder, 
+                             site=self.src_folder.site)
+        to_move_folder.save()
+        self.assertTrue(to_move_folder.parent is self.src_folder)
+        dest_folder = Folder(name="Destination", parent=to_move_folder, 
+                             site=self.src_folder.site)
+        dest_folder.save()
+        response, _ = move_action(
+            self.client, self.src_folder, dest_folder, [to_move_folder])
+        message = get_error_message(response)
+        self.assertEqual(filer_messages.destination_in_same_folder_subtree, 
+                         message)
+        self.assertTrue(to_move_folder.parent is self.src_folder)
+        
+    def test_move_files_and_folders_action_readonly_destination_folder(self):
+        self.assertEqual(self.src_folder.files.count(), 1)
+        dest_folder = Folder.objects.create(
+            name='Destination', folder_type=Folder.CORE_FOLDER)
+        response, _ = move_action(
+            self.client, self.src_folder, dest_folder, [self.image_obj])
+        message = get_error_message(response)
+        self.assertEqual(filer_messages.destination_is_read_only, 
+                         message)
+        self.assertEqual(self.src_folder.files.count(), 1)
+        
+    def test_move_files_and_folders_action_readonly_source_folder(self):
+        source_folder = Folder.objects.create(
+            name='SourceFolder', folder_type=Folder.CORE_FOLDER)
+        to_move = Folder.objects.create(
+            name='ToMove', parent=source_folder, 
+            folder_type=Folder.CORE_FOLDER)
+        
+        response, _ = move_action(
+            self.client, None, self.dst_folder, [source_folder])
+        
+        message = get_error_message(response)
+        self.assertEqual(filer_messages.file_or_folder_is_read_only, 
+                         message)
+    
     def test_validate_no_duplicate_folders_on_move(self):
         """ move file from foo to bar
           foo
@@ -466,14 +524,8 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         self.assertEqual(self.src_folder.files.count(), 1)
         self.assertEqual(self.dst_folder.files.count(), 0)
         self.assertEqual(self.image_obj.original_filename, 'test_file.jpg')
-        url = get_dir_listing_url(self.src_folder)
-        response = self.client.post(url, {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'suffix': 'test',
-            'destination': self.dst_folder.id,
-            helpers.ACTION_CHECKBOX_NAME: 'file-%d' % (self.image_obj.id,),
-        })
+        response = copy_action(self.client, self.src_folder, self.dst_folder, 
+                               [self.image_obj])
         self.assertEqual(self.src_folder.files.count(), 1)
         self.assertEqual(self.dst_folder.files.count(), 1)
         self.assertEqual(self.src_folder.files[0].id, self.image_obj.id)
@@ -483,26 +535,59 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
             File.objects.get(id=dst_image_obj.id).file.path))
         self.assertTrue(os.path.exists(
             File.objects.get(id=self.image_obj.id).file.path))
-
+        
+    def test_copy_files_and_folders_action_no_destination_folder(self):
+        self.assertEqual(self.src_folder.files.count(), 1)
+        self.assertEqual(self.image_obj.original_filename, 'test_file.jpg')
+        response = copy_action(self.client, self.src_folder, None, 
+                               [self.image_obj])
+        self.assertEqual(self.src_folder.files.count(), 1)
+        self.assertEqual(filer_messages.destination_not_selected, 
+                         get_error_message(response))
+        
+    def test_copy_files_and_folders_action_same_destination_folder(self):
+        self.assertEqual(self.src_folder.files.count(), 1)
+        self.assertEqual(self.image_obj.original_filename, 'test_file.jpg')
+        response = copy_action(self.client, self.src_folder, self.src_folder, 
+                             [self.image_obj])
+        self.assertEqual(self.src_folder.files.count(), 1)
+        self.assertEqual(filer_messages.destination_is_in_same_folder, 
+                         get_error_message(response))
+        
+    def test_copy_files_and_folders_action_destination_inside_source(self):
+        to_move_folder = Folder(name="ToMove", parent=self.src_folder, 
+                             site=self.src_folder.site)
+        to_move_folder.save()
+        self.assertTrue(to_move_folder.parent is self.src_folder)
+        dest_folder = Folder(name="Destination", parent=to_move_folder, 
+                             site=self.src_folder.site)
+        dest_folder.save()
+        response = copy_action(self.client, self.src_folder, dest_folder, 
+                               [to_move_folder])
+        message = get_error_message(response)
+        self.assertEqual(filer_messages.destination_in_same_folder_subtree, 
+                         message)
+        self.assertTrue(to_move_folder.parent is self.src_folder)
+        
+    def test_copy_files_and_folders_action_readonly_destination_folder(self):
+        self.assertEqual(self.src_folder.files.count(), 1)
+        self.assertEqual(self.image_obj.original_filename, 'test_file.jpg')
+        dest_folder = Folder.objects.create(
+            name='Destination', folder_type=Folder.CORE_FOLDER)
+        
+        response = copy_action(self.client, self.src_folder, dest_folder, 
+                [self.image_obj])
+        
+        self.assertEqual(self.src_folder.files.count(), 1)
+        self.assertEqual(filer_messages.destination_is_read_only, 
+                         get_error_message(response))
+        
     def test_copy_recursion_error(self):
         ## it's enough to try to move/copy to itself with no error
         ## this means the operation error is caught
-        url = get_dir_listing_url(None)
-        response = self.client.post(url, {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'suffix': 'test',
-            'destination': self.src_folder.id,
-            helpers.ACTION_CHECKBOX_NAME:
-                filer_obj_as_checkox(self.src_folder),
-        })
-        response = self.client.post(url, {
-            'action': 'move_files_and_folders',
-            'post': 'yes',
-            'destination': self.src_folder.id,
-            helpers.ACTION_CHECKBOX_NAME:
-                filer_obj_as_checkox(self.src_folder),
-        }, follow=True)
+        copy_action(self.client, None, self.src_folder, [self.src_folder])
+        copy_action(self.client, None, self.src_folder, [self.src_folder], 
+                    follow=True)
 
 
 class FilerDeleteOperationTests(BulkOperationsMixin, TestCase):
@@ -872,6 +957,9 @@ class BaseTestFolderTypePermissionLayer(object):
             self.client, foo, [file_foo])
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
+        self.assertEqual(get_error_message(response), 
+                         filer_messages.file_or_folder_is_restricted 
+                         % file_foo.actual_name)
 
     def test_move_from_clipboard_to_root(self):
         bar_file = File.objects.create(
@@ -974,6 +1062,8 @@ class BaseTestFolderTypePermissionLayer(object):
         baz = Folder.objects.create(name='baz', site=site, parent=bar)
         response, url = move_action(self.client, bar, foo, [baz])
         assert Folder.objects.filter(parent=foo.id).count() == 0
+        assert filer_messages.destination_has_no_site == \
+               get_error_message(response)
 
     def test_folder_destination_filtering(self):
         orphaned = Folder.objects.create(name='orphaned')
@@ -1023,16 +1113,10 @@ class BaseTestFolderTypePermissionLayer(object):
             Folder.SITE_FOLDER, Site.objects.get(id=1))
         f1 = Folder.objects.create(
             name='destination', folder_type=Folder.CORE_FOLDER)
-
-        url = get_dir_listing_url(None)
-        response = self.client.post(url, {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'destination': f1.id,
-            helpers.ACTION_CHECKBOX_NAME:
-                [filer_obj_as_checkox(folders['bar'])]})
-
-        self.assertEqual(response.status_code, 403)
+        response = copy_action(self.client, None, f1, [folders['bar']])
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(filer_messages.destination_is_read_only, 
+                         get_error_message(response))
         return folders, files
 
     def test_file_from_core_folder_is_unchangeable(self):
@@ -1218,16 +1302,24 @@ class TestFolderTypePermissionLayerForRegularUser(
 
     def test_message_error_user_no_site_on_move_for_site_admins(self):
         self._make_user_site_admin()
-        self.test_message_error_user_no_site_on_move()
-
+        self._message_error_user_no_site_on_move(302)
+        
     def test_message_error_user_no_site_on_move(self):
+        self._message_error_user_no_site_on_move(403)
+
+    def _message_error_user_no_site_on_move(self, status_code):
         site = Site.objects.get(id=1)
         foo_root = Folder.objects.create(name='foo_root')
         foo = Folder.objects.create(name='foo', parent=foo_root)
         bar = Folder.objects.create(name='bar', site=site)
+        
         response, url = move_action(
             self.client, foo_root, bar, [foo])
-        self.assertEqual(response.status_code, 403)
+        
+        self.assertEqual(response.status_code, status_code)
+        if status_code == 302:
+            self.assertEqual(filer_messages.no_site_associated,
+                             get_error_message(response))
 
     def test_move_to_clipboard_from_site_folders_for_site_admins(self):
         self._make_user_site_admin()
@@ -1846,6 +1938,9 @@ class TestFrozenAssetsPermissions(TestCase):
         clipboard, _ = Clipboard.objects.get_or_create(user=self.user)
         self.assertEqual(clipboard.files.count(), 0)
         self.assertEqual(clipboard.clipboarditem_set.count(), 0)
+        self.assertEqual(get_error_message(response), 
+                         filer_messages.file_or_folder_is_restricted 
+                         % self.files['foo_file'].actual_name)
         self.assertEqual(
             File.objects.filter(folder=self.folders['foo']).count(), 2)
 
@@ -1857,7 +1952,10 @@ class TestFrozenAssetsPermissions(TestCase):
             file=dj_files.base.ContentFile('some data'), folder=bar)
         response = move_single_file_to_clipboard_action(
             self.client, bar, [bar_file])
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(get_error_message(response), 
+                         filer_messages.file_or_folder_is_restricted 
+                         % bar_file.actual_name)
 
     def test_move_in_restricted(self):
         bar = Folder.objects.create(name='bar', site=self.site)
@@ -1866,9 +1964,13 @@ class TestFrozenAssetsPermissions(TestCase):
         bar_file = File.objects.create(
             original_filename='bar_file',
             file=dj_files.base.ContentFile('some data'), folder=bar)
+        
         response, _ = move_action(
             self.client, bar, self.folders['foo'], [bar_file])
-        self.assertEqual(response.status_code, 403)
+        
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(filer_messages.destination_is_restricted, 
+                         get_error_message(response))
 
         response, _ = move_action(
             self.client, bar, self.folders['foo'], [bar_subfolder])
@@ -1947,14 +2049,8 @@ class TestFrozenAssetsPermissions(TestCase):
 
     def test_copy_from_restricted(self):
         bar = Folder.objects.create(name='bar', site=self.site)
-        url = get_dir_listing_url(self.folders['foo'])
-        response = self.client.post(url, {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'destination': bar.id,
-            helpers.ACTION_CHECKBOX_NAME:
-                [filer_obj_as_checkox(self.files['foo_file'])]})
-
+        response = copy_action(self.client, self.folders['foo'], bar, 
+                               [self.files['foo_file']])
         assert File.objects.filter(folder=bar).count() == 1
         assert File.objects.get(folder=bar).restricted == False
 
@@ -1963,24 +2059,14 @@ class TestFrozenAssetsPermissions(TestCase):
         bar_file = File.objects.create(
             original_filename='bar_file',
             file=dj_files.base.ContentFile('some data'), folder=bar)
-
-        url = get_dir_listing_url(bar)
-        response = self.client.post(url, {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'destination': self.folders['foo'].id,
-            helpers.ACTION_CHECKBOX_NAME:
-                [filer_obj_as_checkox(bar_file)]})
-        self.assertEqual(response.status_code, 403)
-
-        url = get_dir_listing_url(None)
-        response = self.client.post(url, {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'destination': self.folders['foo'].id,
-            helpers.ACTION_CHECKBOX_NAME:
-                [filer_obj_as_checkox(bar)]})
-        self.assertEqual(response.status_code, 403)
+        response = copy_action(self.client, bar, self.folders['foo'], [bar_file])
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(filer_messages.destination_is_restricted, 
+                         get_error_message(response))
+        response = copy_action(self.client, None, self.folders['foo'], [bar])
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(filer_messages.destination_is_restricted, 
+                         get_error_message(response))
 
 
 class TestSharedSitePermissions(TestCase):
@@ -2117,16 +2203,27 @@ class TestSharedSitePermissions(TestCase):
                 [filer_obj_as_checkox(bar_zippy)]})
         assert Folder.objects.get(id=self.bar.id).files.count() == 1
 
+    def _get_clipboard_files(self):
+        clipboard, _ = Clipboard.objects.get_or_create(
+            user=self.user)
+        return clipboard.files
+    
     def test_move_to_clipboard_from_shared_folder(self):
         bar_file = File.objects.create(
             original_filename='bar_file.txt', folder=self.bar,
             file=dj_files.base.ContentFile('file'))
         response = move_to_clipboard_action(
             self.client, self.bar, [bar_file])
-        self.assertEqual(Clipboard.objects.values_list('files').count(), 0)
-        move_single_file_to_clipboard_action(
+        self.assertEqual(
+            self._get_clipboard_files().count(), 0)
+        response = move_single_file_to_clipboard_action(
             self.client, self.bar, [bar_file])
-        self.assertEqual(Clipboard.objects.values_list('files').count(), 0)
+        self.assertEqual(
+            self._get_clipboard_files().count(), 0)
+        self.assertEqual(get_error_message(response), 
+                         filer_messages.file_or_folder_is_restricted 
+                         % bar_file.actual_name)
+        
 
 
 class TestSharedFolderFunctionality(TestCase):
@@ -2231,14 +2328,9 @@ class TestSharedFolderFunctionality(TestCase):
         foo.shared.add(s1)
         bar.shared.add(s2)
 
-        response = self.client.post(get_dir_listing_url(bar), {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'suffix': '',
-            'destination': foo.id,
-            helpers.ACTION_CHECKBOX_NAME: filer_obj_as_checkox(bar_1),
-        }, follow=True)
-
+        response = copy_action(self.client, bar, foo, [bar_1], suffix='', 
+                               follow=True)
+        
         bar_descendants = Folder.objects.get(
             name='bar').get_descendants()
         for desc_folder in [bar_1, bar_12]:
@@ -2442,17 +2534,9 @@ class TestMPTTCorruptionsOnFolderOperations(TestCase):
             depth=2, sibling=2,
             parent=Folder.objects.get(id=self.src_folder.id))
         TreeChecker().find_corruptions()
-        to_copy = [
-            filer_obj_as_checkox(child)
-            for child in Folder.objects.filter(
-                parent__pk=self.src_folder.pk)]
-        self.client.post(get_dir_listing_url(self.src_folder), {
-            'action': 'copy_files_and_folders',
-            'post': 'yes',
-            'suffix': '',
-            'destination': self.dst_folder.id,
-            helpers.ACTION_CHECKBOX_NAME: to_copy,
-        })
+        copy_action(self.client, self.src_folder, self.dst_folder, 
+                    [child for child in 
+                     Folder.objects.filter(parent__pk=self.src_folder.pk)])
         TreeChecker().find_corruptions()
 
     def test_multi_folders_delete_operation(self):

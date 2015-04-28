@@ -1,23 +1,27 @@
 #-*- coding: utf-8 -*-
-from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from filer.admin import filer_messages
 from filer.utils.cms_roles import *
 from filer.models.foldermodels import Folder
 
 
 def is_valid_destination(request, folder):
+    error_message = validate_destination(request, folder)
+    return False if error_message else True
+
+def validate_destination(request, folder):
     user = request.user
     if folder.is_readonly_for_user(user):
-        return False
+        return filer_messages.destination_is_read_only
     if not folder.site:
-        return False
+        return filer_messages.destination_has_no_site
     if user.is_superuser:
-        return True
+        return None
     if folder.is_restricted_for_user(request.user):
-        return False
+        return filer_messages.destination_is_restricted
     if folder.site.id in get_sites_for_user(user):
-        return True
-    return False
+        return None
+    return filer_messages.destination_site_is_restricted
 
 
 def _filter_available_sites(request):
@@ -104,31 +108,36 @@ def files_available(request, files_qs):
 
 
 def has_multi_file_action_permission(request, files, folders):
+    error_message = validate_multi_file_action_permission(request, 
+                                                          files, folders)
+    return False if error_message else True
+
+def validate_multi_file_action_permission(request, files, folders):
     # unfiled files can be moved/deleted so better to just exclude them
     #   from checking permissions for them
     files = files.exclude(folder__isnull=True)
     user = request.user
-
+    
     if files.readonly(user).exists() or folders.readonly(user).exists():
-        return False
+        return filer_messages.file_or_folder_is_read_only
     if user.is_superuser:
-        return True
+        return None
 
     if files.restricted(user).exists():
-        return False
+        return filer_messages.files_or_folders_restricted
 
     if folders.restricted_descendants(user).exists():
-        return False
+        return filer_messages.files_or_folders_restricted
 
     # only superusers can move/delete files/folders with no site ownership
     if (files.filter(folder__site__isnull=True).exists() or
             folders.filter(site__isnull=True).exists()):
-        return False
+        return filer_messages.no_site_associated
 
     _exists_root_folders = folders.filter(parent__isnull=True).exists()
     if _exists_root_folders:
         if not has_admin_role(user):
-            return False
+            return filer_messages.no_permission_to_edit_root_folders
         # allow site admins to move/delete root files/folders that belong
         #   to the site where is admin
         sites_allowed = [s.id for s in get_admin_sites_for_user(user)]
@@ -137,6 +146,6 @@ def has_multi_file_action_permission(request, files, folders):
 
     if (files.exclude(folder__site__in=sites_allowed).exists() or
             folders.exclude(site__in=sites_allowed).exists()):
-        return False
+        return filer_messages.no_site_ownership
 
-    return True
+    return None
