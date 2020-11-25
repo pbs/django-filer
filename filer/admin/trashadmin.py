@@ -69,8 +69,12 @@ class TrashAdmin(admin.ModelAdmin):
             files_q = Q(folder__deleted_at__isnull=True)
             folders_q = Q(Q(parent=None) | Q(parent__deleted_at__isnull=True))
 
-        file_qs = filer.models.filemodels.File.trash.filter(files_q)
-        folder_qs = filer.models.foldermodels.Folder.trash.filter(folders_q)
+        file_qs = filer.models.filemodels.File.trash.filter(files_q, owner=request.user)
+        folder_qs = filer.models.foldermodels.Folder.trash.filter(folders_q, owner=request.user)
+        if request.user.is_superuser:
+            file_qs = filer.models.filemodels.File.trash.filter(files_q)
+            folder_qs = filer.models.foldermodels.Folder.trash.filter(folders_q)
+
         return MultiMoldelQuerysetChain([
             folder_qs.order_by('-deleted_at'),
             file_qs.order_by('-deleted_at')])
@@ -79,7 +83,7 @@ class TrashAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return request.user.is_superuser
+        return request.user.is_active and request.user.is_authenticated
 
     def has_delete_permission(self, request, obj=None):
         return False
