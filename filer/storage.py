@@ -5,6 +5,7 @@ import urllib.parse
 
 from django.core.files.storage import FileSystemStorage
 from django.utils.encoding import smart_str
+from django.conf import settings
 
 try:
     from storages.backends.s3boto import S3BotoStorage
@@ -41,6 +42,7 @@ def filepath_to_url(path):
 
 
 class PatchedS3BotoStorage(S3BotoStorage):
+    default_acl = getattr(settings, 'AWS_DEFAULT_ACL', None)
 
     def url(self, name):
         if self.custom_domain:
