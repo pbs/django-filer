@@ -1,5 +1,4 @@
-from django.utils import six
-
+import six
 
 def get_model_label(model):
     """
