@@ -3,7 +3,7 @@ from django.forms.models import modelform_factory
 from django.core.exceptions import PermissionDenied
 from django.contrib import admin
 from django.http import HttpResponse, HttpResponseRedirect
-from django.utils.translation import ugettext as _
+from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import re_path
 from filer import settings as filer_settings

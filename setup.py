@@ -14,12 +14,12 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
-    name="django-filer",
+    name='django-filer',
     version=version,
     url='http://github.com/stefanfoulis/django-filer',
     license='BSD',
     platforms=['OS Independent'],
-    description="A file management application for django that makes handling of files and images a breeze.",
+    description='A file management application for django that makes handling of files and images a breeze.',
     long_description=read('README.rst'),
     author='Stefan Foulis',
     author_email='stefan.foulis@gmail.com',
@@ -27,7 +27,7 @@ setup(
     install_requires=(
         'django>=2,<=3.2',
         'django-mptt>=0.6,<1.0',  # the exact version depends on Django
-        'django_polymorphic>=0.7,<2.2',
+        'django_polymorphic==3.1.0',
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
         'six',

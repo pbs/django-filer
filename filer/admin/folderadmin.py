@@ -25,8 +25,8 @@ from django.template.response import TemplateResponse
 from django.utils.encoding import force_text
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
-from django.utils.translation import ugettext as _
-from django.utils.translation import ungettext, ugettext_lazy
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext, gettext_lazy
 from filer.admin.forms import CopyFilesAndFoldersForm
 from filer.admin.common_admin import FolderPermissionModelAdmin
 from filer.views import (popup_status, popup_param, selectfolder_status,
@@ -396,7 +396,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 self.get_action_choices(request)
         else:
             action_form = None
-        selection_note_all = ungettext('%(total_count)s selected',
+        selection_note_all = gettext('%(total_count)s selected',
             'All %(total_count)s selected', paginator.count)
 
         # Make sure page request is an int. If not, deliver first page.
@@ -593,7 +593,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 _("No files were moved to clipboard."))
         return None
 
-    move_to_clipboard.short_description = ugettext_lazy(
+    move_to_clipboard.short_description = gettext_lazy(
         "Move selected files to clipboard")
 
     def _get_unique_items(self, deletable_items, unique_items, depth=5):
@@ -706,7 +706,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
         # Display the destination folder selection page
         return render(request, "admin/filer/delete_selected_files_confirmation.html", context)
 
-    delete_files_or_folders.short_description = ugettext_lazy(
+    delete_files_or_folders.short_description = gettext_lazy(
         "Delete selected files and/or folders")
 
     # Copied from django.contrib.admin.util
@@ -935,7 +935,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
         # Display the destination folder selection page
         return render(request, "admin/filer/folder/choose_move_destination.html", context)
 
-    move_files_and_folders.short_description = ugettext_lazy(
+    move_files_and_folders.short_description = gettext_lazy(
         "Move selected files and/or folders")
 
     def extract_files(self, request, files_queryset, folder_queryset):
@@ -985,7 +985,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                     _("%s: %s" % (f.actual_name, err_msg))
                 )
 
-    extract_files.short_description = ugettext_lazy(
+    extract_files.short_description = gettext_lazy(
         "Extract selected zip files")
 
     def _copy_file(self, file_obj, destination, suffix, overwrite):
@@ -1146,7 +1146,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
         # Display the destination folder selection page
         return render(request, "admin/filer/folder/choose_copy_destination.html", context)
 
-    copy_files_and_folders.short_description = ugettext_lazy(
+    copy_files_and_folders.short_description = gettext_lazy(
         "Copy selected files and/or folders")
 
     def files_toggle_restriction(self, request, restriction,
@@ -1196,14 +1196,14 @@ class FolderAdmin(FolderPermissionModelAdmin):
         return self.files_toggle_restriction(
             request, True, files_qs, folders_qs)
 
-    enable_restriction.short_description = ugettext_lazy(
+    enable_restriction.short_description = gettext_lazy(
         "Enable restriction for selected and/or folders")
 
     def disable_restriction(self, request, files_qs, folders_qs):
         return self.files_toggle_restriction(
             request, False, files_qs, folders_qs)
 
-    disable_restriction.short_description = ugettext_lazy(
+    disable_restriction.short_description = gettext_lazy(
         "Disable restriction for selected and/or folders")
 
 '''

@@ -4,7 +4,7 @@ Archiving support for filer.
 from filer.models.filemodels import File
 from filer.models.foldermodels import Folder
 from filer.models.imagemodels import Image as FilerImage
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
 from django.core.files.base import ContentFile
 from django.db.models import Q
 from filer.settings import FILER_IS_PUBLIC_DEFAULT

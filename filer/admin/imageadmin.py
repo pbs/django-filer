@@ -1,11 +1,9 @@
 #-*- coding: utf-8 -*-
 from django import forms
-from django.utils.translation import ugettext  as _
+from django.utils.translation import gettext  as _
 from django.shortcuts import render
-from django.template import RequestContext
 from django.http import Http404
 from django.urls import re_path
-from filer import settings as filer_settings, settings
 from filer.admin.fileadmin import FileAdmin
 from filer.models import Image
 from filer.views import (popup_status, selectfolder_status)
