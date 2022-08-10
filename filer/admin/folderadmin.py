@@ -4,7 +4,6 @@ import os
 import re
 from functools import partial
 
-from django import template
 from django.conf import settings
 from django.contrib.admin import helpers
 from django.contrib.admin.utils import quote, unquote, capfirst
@@ -20,13 +19,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_permission_codename
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.shortcuts import render
-from django.template import RequestContext
-from django.template.response import TemplateResponse
 from django.utils.encoding import force_text
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
-from django.utils.translation import ngettext, gettext_lazy
+from django.utils.translation import ungettext, gettext_lazy
 from filer.admin.forms import CopyFilesAndFoldersForm
 from filer.admin.common_admin import FolderPermissionModelAdmin
 from filer.views import (popup_status, popup_param, selectfolder_status,
@@ -38,7 +35,7 @@ from filer.admin.tools import (folders_available, files_available,
                                is_valid_destination,)
 from filer.models import (Folder, FolderRoot, UnfiledImages, File, tools,
                           ImagesWithMissingData,
-                          Archive, Image, DummyFolder)
+                          Archive, Image)
 from filer.settings import FILER_STATICMEDIA_PREFIX, FILER_PAGINATE_BY
 from filer.utils.multi_model_qs import MultiMoldelQuerysetChain
 
@@ -396,7 +393,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 self.get_action_choices(request)
         else:
             action_form = None
-        selection_note_all = gettext('%(total_count)s selected',
+        selection_note_all = ungettext('%(total_count)s selected',
             'All %(total_count)s selected', paginator.count)
 
         # Make sure page request is an int. If not, deliver first page.
