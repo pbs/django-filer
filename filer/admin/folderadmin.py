@@ -19,7 +19,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_permission_codename
 from django.http import HttpResponseRedirect, Http404, HttpResponse
 from django.shortcuts import render
-from django.utils.encoding import force_text
+from django.utils.encoding import force_str
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
