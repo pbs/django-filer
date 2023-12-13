@@ -14,7 +14,7 @@ from django.contrib.auth import get_permission_codename
 from django.utils.text import capfirst
 from django.utils.html import format_html
 from django.urls import NoReverseMatch, reverse
-from django.utils.text import force_text
+from django.utils.text import force_str
 
 
 
