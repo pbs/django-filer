@@ -44,8 +44,8 @@ class Image(File):
     date_taken = models.DateTimeField(_('date taken'), null=True, blank=True,
                                       editable=False)
 
-    default_alt_text = models.CharField(
-        _('default alt text'), max_length=255, blank=True, null=True,
+    default_alt_text = models.TextField(
+        _('default alt text'), blank=True, null=True,
         help_text=_('Describes the essence of the image for users who have '
                     'images turned off in their browser, or are visually '
                     'impaired and using a screen reader; and it is used to '
