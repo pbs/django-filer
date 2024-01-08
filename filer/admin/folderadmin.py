@@ -393,7 +393,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 self.get_action_choices(request)
         else:
             action_form = None
-        selection_note_all = ungettext('%(total_count)s selected',
+        selection_note_all = gettext_lazy('%(total_count)s selected',
             'All %(total_count)s selected', paginator.count)
 
         # Make sure page request is an int. If not, deliver first page.
