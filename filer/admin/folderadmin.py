@@ -162,7 +162,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
     icon_img.allow_tags = True
 
     def get_urls(self):
-        from django.conf.urls import url
         urls = super(FolderAdmin, self).get_urls()
         url_patterns = [
             # we override the default list view with our own directory listing
