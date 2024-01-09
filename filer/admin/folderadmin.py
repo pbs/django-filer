@@ -23,7 +23,7 @@ from django.utils.encoding import force_str
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
-from django.utils.translation import ungettext, gettext_lazy
+from django.utils.translation import gettext_lazy
 from filer.admin.forms import CopyFilesAndFoldersForm
 from filer.admin.common_admin import FolderPermissionModelAdmin
 from filer.views import (popup_status, popup_param, selectfolder_status,
