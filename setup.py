@@ -1,5 +1,6 @@
-from setuptools import setup, find_packages
 import os
+
+from setuptools import setup, find_packages
 
 try:
     from setuptest import test
@@ -28,6 +29,7 @@ setup(
         'django>=3.2,<=4.2',
         'django-mptt>=0.6,<1.0',  # the exact version depends on Django
         'django_polymorphic==3.1.0',
+        'django-js-asset==2.0.0',
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
         'six',
