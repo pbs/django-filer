@@ -113,7 +113,7 @@ class File(PolymorphicModel,
     _icon = "file"
     folder = models.ForeignKey('filer.Folder', verbose_name=_('folder'), related_name='all_files',
         null=True, blank=True, on_delete=models.deletion.CASCADE)
-    file = MultiStorageFileField(_('file'), null=True, blank=True, db_index=True, max_length=255)
+    file = MultiStorageFileField(_('file'), null=True, blank=True, db_index=True, max_length=1024)
     _file_size = models.IntegerField(_('file size'), null=True, blank=True)
 
     sha1 = models.CharField(_('sha1'), max_length=40, blank=True, default='')
@@ -309,7 +309,10 @@ class File(PolymorphicModel,
             self.generate_sha1()
         except (IOError, TypeError, ValueError) as e:
             pass
-        if filer_settings.FOLDER_AFFECTS_URL and self._is_path_changed():
+        replaced_file = self._old_sha1 != self.sha1
+        if filer_settings.FOLDER_AFFECTS_URL and (self._is_path_changed() or replaced_file):
+            if replaced_file:
+                self.name = None  # if new file submitted for same id we overwrite what was previously in name
             self._force_commit = True
             self.update_location_on_storage(*args, **kwargs)
         else:
