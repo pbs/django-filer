@@ -6,8 +6,8 @@ from django.core.exceptions import ValidationError
 from django.db import (models, IntegrityError, transaction)
 from django.db.models import (query, Q, signals, DEFERRED)
 from django.dispatch import receiver
-from django.utils.http import urlquote
-from django.utils.translation import ugettext_lazy as _
+from django.utils.translation import gettext_lazy as _
+from urllib.parse import quote
 from filer.utils.cms_roles import *
 from filer.models import mixins
 from filer import settings as filer_settings

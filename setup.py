@@ -15,21 +15,21 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup(
-    name="django-filer",
+    name='django-filer',
     version=version,
     url='http://github.com/stefanfoulis/django-filer',
     license='BSD',
     platforms=['OS Independent'],
-    description="A file management application for django that makes handling of files and images a breeze.",
+    description='A file management application for django that makes handling of files and images a breeze.',
     long_description=read('README.rst'),
     author='Stefan Foulis',
     author_email='stefan.foulis@gmail.com',
     packages=find_packages(),
     install_requires=(
+        'django>=4.2',
+        'django-mptt>=0.6,<1.0',  # the exact version depends on Django
+        'django_polymorphic==3.1.0',
         'django-js-asset==2.0.0',
-        'django>=1.11,<3.0',
-        'django-mptt==0.11.1',  # the exact version depends on Django
-        'django_polymorphic>=0.7,<2.2',
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
         'six',

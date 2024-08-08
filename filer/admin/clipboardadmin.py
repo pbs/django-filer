@@ -3,7 +3,7 @@ from django.forms.models import modelform_factory
 from django.core.exceptions import PermissionDenied
 from django.contrib import admin
 from django.http import HttpResponse, HttpResponseRedirect
-from django.utils.translation import ugettext as _
+from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import re_path
 from filer import settings as filer_settings
@@ -42,7 +42,6 @@ class ClipboardAdmin(admin.ModelAdmin):
     }
 
     def get_urls(self):
-        from django.conf.urls import url
         urls = super(ClipboardAdmin, self).get_urls()
         url_patterns = [
             re_path(r'^operations/paste_clipboard_to_folder/$',

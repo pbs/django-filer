@@ -12,8 +12,8 @@ Wiki: https://github.com/stefanfoulis/django-filer/wiki
 Dependencies
 ------------
 
-* `Django`_ >= 1.3 (with ``django.contrib.staticfiles``)
-* django-mptt >= 0.2.1
+* `Django`_ >=4.2 (with ``django.contrib.staticfiles``)
+* `django-mptt`_ >= 0.2.1
 * `easy_thumbnails`_ >= 1.0-alpha-17
 * `django-polymorphic`_ >= 0.2
 * `PIL`_ 1.1.7 (with JPEG and ZLIB support)
