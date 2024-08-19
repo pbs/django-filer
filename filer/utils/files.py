@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from filer.settings import FILER_FILE_MODELS
 from filer.utils.loader import load_object
-from filer.utils.status import is_ajax
+from filer.utils.is_ajax import is_ajax
 
 
 import imghdr

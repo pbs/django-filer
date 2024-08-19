@@ -38,7 +38,7 @@ from filer.models import (Folder, FolderRoot, UnfiledImages, File, tools,
                           Archive, Image)
 from filer.settings import FILER_STATICMEDIA_PREFIX, FILER_PAGINATE_BY
 from filer.utils.multi_model_qs import MultiMoldelQuerysetChain
-from filer.utils.status import is_ajax
+from filer.utils.is_ajax import is_ajax
 
 
 ELEM_ID = re.compile(r'.*<a href=".*/(?P<file_id>[0-9]+)/.*".*a>$')

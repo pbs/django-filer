@@ -16,7 +16,7 @@ from filer.views import (
     file_type_param
 )
 from filer.admin.tools import is_valid_destination
-from filer.utils.status import is_ajax
+from filer.utils.is_ajax import is_ajax
 import os
 import json
 

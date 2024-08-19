@@ -6,9 +6,6 @@ from django.contrib.sites.models import Site
 
 from filer.models import File, Folder
 
-def is_ajax(request):
-    """Checks if a request is ajax."""
-    return request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
 def chunked_items(qs, size=100):
     pk = 0
