@@ -8,6 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from filer.settings import FILER_FILE_MODELS
 from filer.utils.loader import load_object
+from filer.utils.is_ajax import is_ajax
 
 
 import imghdr
@@ -19,7 +20,7 @@ class UploadException(Exception):
 def handle_upload(request):
     if not request.method == "POST":
         raise UploadException("AJAX request not valid: must be POST")
-    if request.is_ajax():
+    if is_ajax(request):
         # the file is stored raw in the request
         is_raw = True
         filename = request.GET.get('qqfile', False) or request.GET.get('filename', False) or ''
@@ -89,4 +90,3 @@ def truncate_filename(upload, maxlen=None):
                                       ext=extension.lstrip('.') or
                                       imghdr.what(upload))
     return filename
-

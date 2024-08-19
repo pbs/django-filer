@@ -38,6 +38,7 @@ from filer.models import (Folder, FolderRoot, UnfiledImages, File, tools,
                           Archive, Image)
 from filer.settings import FILER_STATICMEDIA_PREFIX, FILER_PAGINATE_BY
 from filer.utils.multi_model_qs import MultiMoldelQuerysetChain
+from filer.utils.is_ajax import is_ajax
 
 
 ELEM_ID = re.compile(r'.*<a href=".*/(?P<file_id>[0-9]+)/.*".*a>$')
@@ -218,7 +219,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
         if obj is None:
             raise Http404(_('%(name)s object with primary key %(key)r '
                             'does not exist.') % {
-                                'name': force_text(opts.verbose_name),
+                                'name': force_str(opts.verbose_name),
                                 'key': escape(object_id)})
         if obj.parent:
             redirect_url = reverse('admin:filer-directory_listing',
@@ -664,12 +665,12 @@ class FolderAdmin(FolderPermissionModelAdmin):
             if total_count:
                 # delete all explicitly selected files
                 for file_obj in files_queryset:
-                    self.log_deletion(request, file_obj, force_text(file_obj))
+                    self.log_deletion(request, file_obj, force_str(file_obj))
                     file_obj.delete()
                 # delete all folders
                 for file_id in folders_queryset.values_list('id', flat=True):
                     file_obj = Folder.objects.get(id=file_id)
-                    self.log_deletion(request, file_obj, force_text(file_obj))
+                    self.log_deletion(request, file_obj, force_str(file_obj))
                     file_obj.delete()
                 self.message_user(request,
                     _("Successfully deleted %(count)d files "
@@ -730,7 +731,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
             # Don't display link to edit, because it either has no
             # admin or is edited inline.
             return '%s: %s' % (capfirst(opts.verbose_name),
-                                force_text(obj.actual_name))
+                                force_str(obj.actual_name))
 
     def _get_current_action_folder(self, request, files_qs, folders_qs):
         current_folder = getattr(request, 'current_dir_list_folder', None)
@@ -804,7 +805,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
     def destination_folders(self, request):
         all_required = all((
             request.method == 'GET',
-            request.is_ajax(),
+            is_ajax(request),
             request.user.is_authenticated,
             'parent' in request.GET
         ))

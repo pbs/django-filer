@@ -162,4 +162,3 @@ class FileChecker(object):
             log_progress(stats)
 
         return stats
-
