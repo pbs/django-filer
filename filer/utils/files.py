@@ -11,7 +11,7 @@ from filer.utils.loader import load_object
 from filer.utils.is_ajax import is_ajax
 
 
-import imghdr
+import filetype
 
 class UploadException(Exception):
     pass
@@ -88,5 +88,5 @@ def truncate_filename(upload, maxlen=None):
     title, extension = os.path.splitext(upload.name)
     filename = '{title}.{ext}'.format(title=title[:maxlen],
                                       ext=extension.lstrip('.') or
-                                      imghdr.what(upload))
+                                      filetype.extension(upload))
     return filename
