@@ -11,7 +11,7 @@ from filer.utils.loader import load_object
 from filer.utils.is_ajax import is_ajax
 
 
-import filetype
+import magic
 
 class UploadException(Exception):
     pass
@@ -85,8 +85,7 @@ def truncate_filename(upload, maxlen=None):
     Return truncated filename
     Pre-extension filename will be less than or equals maxlen(if passed)
     """
+    file_type = magic.from_file(upload, mime=True)
     title, extension = os.path.splitext(upload.name)
-    filename = '{title}.{ext}'.format(title=title[:maxlen],
-                                      ext=extension.lstrip('.') or
-                                      filetype.extension(upload))
+    filename = '{title}.{ext}'.format(title=title[:maxlen], ext=extension.lstrip('.') or file_type)
     return filename
