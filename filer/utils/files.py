@@ -90,7 +90,7 @@ def truncate_filename(upload, maxlen=None):
     filename = '{title}.{ext}'.format(title=title[:maxlen], ext=extension.lstrip('.'))
     return filename
 
-def save_first_n_bytes_to_file(in_memory_file, destination_path , num_bytes):
+def save_first_n_bytes_to_file(in_memory_file, destination_path , num_bytes=100):
     """
     Reads the first 'num_bytes' from an InMemoryUploadedFile and saves them to a new file on disk.
 
