@@ -4,7 +4,7 @@ import mimetypes
 
 from django.utils.text import get_valid_filename as get_valid_filename_django
 from django.template.defaultfilters import slugify
-from django.core.files.uploadedfile import SimpleUploadedFile, InMemoryUploadedFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from filer.settings import FILER_FILE_MODELS
 from filer.utils.loader import load_object
@@ -89,39 +89,3 @@ def truncate_filename(upload, maxlen=None):
     title, extension = os.path.splitext(upload.name)
     filename = '{title}.{ext}'.format(title=title[:maxlen], ext=extension.lstrip('.'))
     return filename
-
-def save_first_n_bytes_to_file(in_memory_file, destination_path , num_bytes=100):
-    """
-    Reads the first 'num_bytes' from an InMemoryUploadedFile and saves them to a new file on disk.
-
-    Args:
-        in_memory_file: The InMemoryUploadedFile object received (e.g., from request.FILES).
-        destination_path: The full path (including filename) where the bytes should be saved.
-                          Example: "my_output_dir/first_100_bytes.bin"
-        num_bytes: The number of bytes to read and save from the beginning of the file.
-                   Defaults to 100.
-    """
-    if not isinstance(in_memory_file, InMemoryUploadedFile):
-        logger.error(f"Error: Expected an InMemoryUploadedFile, but got {type(in_memory_file)}")
-        return
-
-    try:
-        # Ensure the file pointer is at the beginning before reading
-        # This is crucial because a file-like object's pointer might have moved
-        # if it was already accessed elsewhere (e.g., for type detection).
-        in_memory_file.seek(0)
-
-        # Read the specified number of bytes
-        first_bytes = in_memory_file.read(num_bytes)
-
-        # Ensure the destination directory exists
-        output_dir = os.path.dirname(destination_path)
-        if output_dir: # Only create if path includes a directory
-            os.makedirs(output_dir, exist_ok=True)
-
-        # Write the bytes to the new file on disk in binary mode
-        with open(destination_path, 'wb') as f_out:
-            f_out.write(first_bytes)
-
-    except Exception as e:
-        logger.error(f"An error occurred while saving the bytes: {e}")
