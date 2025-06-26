@@ -9,7 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from filer.settings import FILER_FILE_MODELS
 from filer.utils.loader import load_object
 from filer.utils.is_ajax import is_ajax
-
+import filetype
 
 import logging
 logger = logging.getLogger(__name__)
@@ -86,6 +86,8 @@ def truncate_filename(upload, maxlen=None):
     Return truncated filename
     Pre-extension filename will be less than or equals maxlen(if passed)
     """
+    type_data = filetype.guess(upload.file)
     title, extension = os.path.splitext(upload.name)
-    filename = '{title}.{ext}'.format(title=title[:maxlen], ext=extension.lstrip('.'))
+    filename = '{title}.{ext}'.format(title=title[:maxlen],
+                                      ext=extension.lstrip('.') or type_data)
     return filename
