@@ -187,11 +187,11 @@ for s in ['public', 'private']:
 FILER_SERVERS = RecursiveDictionaryWithExcludes(MINIMAL_FILER_SERVERS, rec_excluded_keys=('OPTIONS',))
 FILER_SERVERS.rec_update(getattr(settings, 'FILER_SERVERS', {}))
 
-def update_server_settings(settings_dict, defaults, s, t):
-    if not settings_dict[s][t]['ENGINE']:
-        settings_dict[s][t]['ENGINE'] = defaults[s][t]['ENGINE']
-        settings_dict[s][t]['OPTIONS'] = defaults[s][t]['OPTIONS']
-    return settings_dict
+def update_server_settings(settings, defaults, s, t):
+    if not settings[s][t]['ENGINE']:
+        settings[s][t]['ENGINE'] = defaults[s][t]['ENGINE']
+        settings[s][t]['OPTIONS'] = defaults[s][t]['OPTIONS']
+    return settings
 
 for t in ['main', 'thumbnails']:
     update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', t)
