@@ -199,7 +199,7 @@ for t in ['main', 'thumbnails']:
 def get_storage_class(path):
     return import_string(path)
 
-# Public media
+# Public media (media accessible without any permission checks)
 FILER_PUBLICMEDIA_STORAGE = get_storage_class(FILER_STORAGES['public']['main']['ENGINE'])(**FILER_STORAGES['public']['main']['OPTIONS'])
 FILER_PUBLICMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['public']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['public']['main']:
@@ -209,7 +209,8 @@ if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['public']['main']:
 FILER_PUBLICMEDIA_THUMBNAIL_STORAGE = get_storage_class(FILER_STORAGES['public']['thumbnails']['ENGINE'])(**FILER_STORAGES['public']['thumbnails']['OPTIONS'])
 FILER_PUBLICMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['public']['thumbnails']['THUMBNAIL_OPTIONS']
 
-# Private media
+
+# Private media (media accessible through permissions checks)
 FILER_PRIVATEMEDIA_STORAGE = get_storage_class(FILER_STORAGES['private']['main']['ENGINE'])(**FILER_STORAGES['private']['main']['OPTIONS'])
 FILER_PRIVATEMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['private']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['private']['main']:
@@ -221,12 +222,44 @@ FILER_PRIVATEMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['private']['thumbnails']['
 FILER_PRIVATEMEDIA_SERVER = load_object(FILER_SERVERS['private']['main']['ENGINE'])(**FILER_SERVERS['private']['main']['OPTIONS'])
 FILER_PRIVATEMEDIA_THUMBNAIL_SERVER = load_object(FILER_SERVERS['private']['thumbnails']['ENGINE'])(**FILER_SERVERS['private']['thumbnails']['OPTIONS'])
 
-# Misc settings
 FOLDER_AFFECTS_URL = getattr(settings, 'FILER_FOLDER_AFFECTS_URL', False)
 CDN_DOMAIN = getattr(settings, 'FILER_CDN_DOMAIN', None)
 CDN_INVALIDATION_TIME = getattr(settings, 'FILER_CDN_INVALIDATION_TIME', 0)
 FILER_TRASH_PREFIX = getattr(settings, 'FILER_TRASH_PREFIX', '_trash')
+# defaults to one day
 FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 * 60 * 24)
 
-# Roles manager
+# Roles Manager that controles how the filer checks permissions
+# Must be a callable or a the absolute path of the callable as a string.
+# Calling this manager should return an object that must define these functions:
+#
+# def is_site_admin(user):
+#     """
+#     :param user: django.contrib.auth.models.User to check permissions for
+#     :return: True if the user is an admin on any site, False otherwise
+#     """
+#     pass
+
+# def has_perm_on_site(user, site_id, perm):
+#     """
+#     :param user: django.contrib.auth.models.User to check permissions for
+#     :param site_id: id of django.contrib.sites.models.Site
+#                     on which the user must have the permission
+#     :param perm: full name (<app_label>.<permission>) of the permission, ex: filer.add_file
+#     :return: True if the user has the permission on that site, False otherwise
+#     """
+#     pass
+
+# def get_accessible_sites(user):
+#     """
+#     :return: list of django.contrib.sites.models.Site IDs on which the user has access.
+#     """
+#     pass
+
+# def get_administered_sites(user):
+#     """
+#     :return: list of django.contrib.sites.models.Site objects on which the user has admin access.
+#     """
+#     pass
+
 FILER_ROLES_MANAGER = getattr(settings, 'FILER_ROLES_MANAGER', 'cmsroles.siteadmin.FilerRolesManager')
