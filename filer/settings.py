@@ -2,7 +2,7 @@
 import os
 
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.utils.module_loading import import_string
 
 from filer.utils.loader import load_object
 from filer.utils.recursive_dictionary import RecursiveDictionaryWithExcludes
@@ -64,7 +64,6 @@ MINIMAL_FILER_STORAGES = {
             },
         },
     }
-
 
 DEFAULT_FILER_STORAGES = {
     'public': {
@@ -180,85 +179,54 @@ def update_storage_settings(user_settings, defaults, s, t):
             user_settings[s][t]['THUMBNAIL_OPTIONS'] = defaults[s][t]['THUMBNAIL_OPTIONS']
     return user_settings
 
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'public', 'main')
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'public', 'thumbnails')
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'private', 'main')
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'private', 'thumbnails')
+for s in ['public', 'private']:
+    for t in ['main', 'thumbnails']:
+        update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, s, t)
 
 FILER_SERVERS = RecursiveDictionaryWithExcludes(MINIMAL_FILER_SERVERS, rec_excluded_keys=('OPTIONS',))
 FILER_SERVERS.rec_update(getattr(settings, 'FILER_SERVERS', {}))
 
-def update_server_settings(settings, defaults, s, t):
-    if not settings[s][t]['ENGINE']:
-        settings[s][t]['ENGINE'] = defaults[s][t]['ENGINE']
-        settings[s][t]['OPTIONS'] = defaults[s][t]['OPTIONS']
-    return settings
+def update_server_settings(settings_dict, defaults, s, t):
+    if not settings_dict[s][t]['ENGINE']:
+        settings_dict[s][t]['ENGINE'] = defaults[s][t]['ENGINE']
+        settings_dict[s][t]['OPTIONS'] = defaults[s][t]['OPTIONS']
+    return settings_dict
 
-update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', 'main')
-update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', 'thumbnails')
+for t in ['main', 'thumbnails']:
+    update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', t)
 
+# Storage class loader (Django 5.1+)
+def get_storage_class(path):
+    return import_string(path)
 
-
-# Public media (media accessible without any permission checks)
+# Public media
 FILER_PUBLICMEDIA_STORAGE = get_storage_class(FILER_STORAGES['public']['main']['ENGINE'])(**FILER_STORAGES['public']['main']['OPTIONS'])
 FILER_PUBLICMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['public']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['public']['main']:
-    FILER_PUBLICMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(FILER_PUBLICMEDIA_UPLOAD_TO, FILER_STORAGES['public']['main']['UPLOAD_TO_PREFIX'])
+    FILER_PUBLICMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(
+        FILER_PUBLICMEDIA_UPLOAD_TO, FILER_STORAGES['public']['main']['UPLOAD_TO_PREFIX']
+    )
 FILER_PUBLICMEDIA_THUMBNAIL_STORAGE = get_storage_class(FILER_STORAGES['public']['thumbnails']['ENGINE'])(**FILER_STORAGES['public']['thumbnails']['OPTIONS'])
 FILER_PUBLICMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['public']['thumbnails']['THUMBNAIL_OPTIONS']
 
-
-# Private media (media accessible through permissions checks)
+# Private media
 FILER_PRIVATEMEDIA_STORAGE = get_storage_class(FILER_STORAGES['private']['main']['ENGINE'])(**FILER_STORAGES['private']['main']['OPTIONS'])
 FILER_PRIVATEMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['private']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['private']['main']:
-    FILER_PRIVATEMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(FILER_PRIVATEMEDIA_UPLOAD_TO, FILER_STORAGES['private']['main']['UPLOAD_TO_PREFIX'])
+    FILER_PRIVATEMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(
+        FILER_PRIVATEMEDIA_UPLOAD_TO, FILER_STORAGES['private']['main']['UPLOAD_TO_PREFIX']
+    )
 FILER_PRIVATEMEDIA_THUMBNAIL_STORAGE = get_storage_class(FILER_STORAGES['private']['thumbnails']['ENGINE'])(**FILER_STORAGES['private']['thumbnails']['OPTIONS'])
 FILER_PRIVATEMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['private']['thumbnails']['THUMBNAIL_OPTIONS']
 FILER_PRIVATEMEDIA_SERVER = load_object(FILER_SERVERS['private']['main']['ENGINE'])(**FILER_SERVERS['private']['main']['OPTIONS'])
 FILER_PRIVATEMEDIA_THUMBNAIL_SERVER = load_object(FILER_SERVERS['private']['thumbnails']['ENGINE'])(**FILER_SERVERS['private']['thumbnails']['OPTIONS'])
 
+# Misc settings
 FOLDER_AFFECTS_URL = getattr(settings, 'FILER_FOLDER_AFFECTS_URL', False)
 CDN_DOMAIN = getattr(settings, 'FILER_CDN_DOMAIN', None)
 CDN_INVALIDATION_TIME = getattr(settings, 'FILER_CDN_INVALIDATION_TIME', 0)
 FILER_TRASH_PREFIX = getattr(settings, 'FILER_TRASH_PREFIX', '_trash')
-# defaults to one day
 FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 * 60 * 24)
 
-
-# Roles Manager that controles how the filer checks permissions
-# Must be a callable or a the absolute path of the callable as a string.
-# Calling this manager should return an object that must define these functions:
-#
-# def is_site_admin(user):
-#     """
-#     :param user: django.contrib.auth.models.User to check permissions for
-#     :return: True if the user is an admin on any site, False otherwise
-#     """
-#     pass
-
-# def has_perm_on_site(user, site_id, perm):
-#     """
-#     :param user: django.contrib.auth.models.User to check permissions for
-#     :param site_id: id of django.contrib.sites.models.Site
-#                     on which the user must have the permission
-#     :param perm: full name (<app_label>.<permission>) of the permission, ex: filer.add_file
-#     :return: True if the user has the permission on that site, False otherwise
-#     """
-#     pass
-
-# def get_accessible_sites(user):
-#     """
-#     :return: list of django.contrib.sites.models.Site IDs on which the user has access.
-#     """
-#     pass
-
-# def get_administered_sites(user):
-#     """
-#     :return: list of django.contrib.sites.models.Site objects on which the user has admin access.
-#     """
-#     pass
-
-FILER_ROLES_MANAGER = getattr(settings,
-                              'FILER_ROLES_MANAGER',
-                              'cmsroles.siteadmin.FilerRolesManager')
+# Roles manager
+FILER_ROLES_MANAGER = getattr(settings, 'FILER_ROLES_MANAGER', 'cmsroles.siteadmin.FilerRolesManager')
