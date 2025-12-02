@@ -230,6 +230,7 @@ FILER_TRASH_PREFIX = getattr(settings, 'FILER_TRASH_PREFIX', '_trash')
 # defaults to one day
 FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 * 60 * 24)
 
+
 # Roles Manager that controles how the filer checks permissions
 # Must be a callable or a the absolute path of the callable as a string.
 # Calling this manager should return an object that must define these functions:
