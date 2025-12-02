@@ -65,6 +65,7 @@ MINIMAL_FILER_STORAGES = {
         },
     }
 
+
 DEFAULT_FILER_STORAGES = {
     'public': {
         'main': {
@@ -262,4 +263,6 @@ FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 
 #     """
 #     pass
 
-FILER_ROLES_MANAGER = getattr(settings, 'FILER_ROLES_MANAGER', 'cmsroles.siteadmin.FilerRolesManager')
+FILER_ROLES_MANAGER = getattr(settings,
+                              'FILER_ROLES_MANAGER',
+                              'cmsroles.siteadmin.FilerRolesManager')
