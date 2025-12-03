@@ -2,7 +2,7 @@
 import os
 
 from django.conf import settings
-from django.core.files.storage import get_storage_class
+from django.utils.module_loading import import_string
 
 from filer.utils.loader import load_object
 from filer.utils.recursive_dictionary import RecursiveDictionaryWithExcludes
@@ -180,10 +180,9 @@ def update_storage_settings(user_settings, defaults, s, t):
             user_settings[s][t]['THUMBNAIL_OPTIONS'] = defaults[s][t]['THUMBNAIL_OPTIONS']
     return user_settings
 
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'public', 'main')
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'public', 'thumbnails')
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'private', 'main')
-update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'private', 'thumbnails')
+for s in ['public', 'private']:
+    for t in ['main', 'thumbnails']:
+        update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, s, t)
 
 FILER_SERVERS = RecursiveDictionaryWithExcludes(MINIMAL_FILER_SERVERS, rec_excluded_keys=('OPTIONS',))
 FILER_SERVERS.rec_update(getattr(settings, 'FILER_SERVERS', {}))
@@ -194,16 +193,20 @@ def update_server_settings(settings, defaults, s, t):
         settings[s][t]['OPTIONS'] = defaults[s][t]['OPTIONS']
     return settings
 
-update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', 'main')
-update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', 'thumbnails')
+for t in ['main', 'thumbnails']:
+    update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', t)
 
-
+# Storage class loader (Django 5.1+)
+def get_storage_class(path):
+    return import_string(path)
 
 # Public media (media accessible without any permission checks)
 FILER_PUBLICMEDIA_STORAGE = get_storage_class(FILER_STORAGES['public']['main']['ENGINE'])(**FILER_STORAGES['public']['main']['OPTIONS'])
 FILER_PUBLICMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['public']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['public']['main']:
-    FILER_PUBLICMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(FILER_PUBLICMEDIA_UPLOAD_TO, FILER_STORAGES['public']['main']['UPLOAD_TO_PREFIX'])
+    FILER_PUBLICMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(
+        FILER_PUBLICMEDIA_UPLOAD_TO, FILER_STORAGES['public']['main']['UPLOAD_TO_PREFIX']
+    )
 FILER_PUBLICMEDIA_THUMBNAIL_STORAGE = get_storage_class(FILER_STORAGES['public']['thumbnails']['ENGINE'])(**FILER_STORAGES['public']['thumbnails']['OPTIONS'])
 FILER_PUBLICMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['public']['thumbnails']['THUMBNAIL_OPTIONS']
 
@@ -212,7 +215,9 @@ FILER_PUBLICMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['public']['thumbnails']['TH
 FILER_PRIVATEMEDIA_STORAGE = get_storage_class(FILER_STORAGES['private']['main']['ENGINE'])(**FILER_STORAGES['private']['main']['OPTIONS'])
 FILER_PRIVATEMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['private']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['private']['main']:
-    FILER_PRIVATEMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(FILER_PRIVATEMEDIA_UPLOAD_TO, FILER_STORAGES['private']['main']['UPLOAD_TO_PREFIX'])
+    FILER_PRIVATEMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(
+        FILER_PRIVATEMEDIA_UPLOAD_TO, FILER_STORAGES['private']['main']['UPLOAD_TO_PREFIX']
+    )
 FILER_PRIVATEMEDIA_THUMBNAIL_STORAGE = get_storage_class(FILER_STORAGES['private']['thumbnails']['ENGINE'])(**FILER_STORAGES['private']['thumbnails']['OPTIONS'])
 FILER_PRIVATEMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['private']['thumbnails']['THUMBNAIL_OPTIONS']
 FILER_PRIVATEMEDIA_SERVER = load_object(FILER_SERVERS['private']['main']['ENGINE'])(**FILER_SERVERS['private']['main']['OPTIONS'])
