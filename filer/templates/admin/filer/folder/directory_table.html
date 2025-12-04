@@ -42,10 +42,10 @@
 
         {% if not folder.is_root %}
         {% if folder.item_count == 0 %}
-            <tr class="{% cycle rowcolors %}">
-                <!-- FileIcon -->
-                <td colspan="5" class="row1" style="text-align: center;vertical-align: middle;height:128px;color: gray;">{% trans "there are no files or subfolders" %}</td>
-            </tr>
+        <tr class="{% cycle rowcolors %}">
+            <!-- FileIcon -->
+            <td colspan="5" class="row1" style="text-align: center;vertical-align: middle;height:128px;color: gray;">{% trans "there are no files or subfolders" %}</td>
+        </tr>
         {% endif %}
         {% endif %}
         </tbody>
