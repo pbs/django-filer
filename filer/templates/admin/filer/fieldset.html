@@ -11,7 +11,7 @@
 
                 {% for field in line %}
                     <div class="row{% if not line.fields|length == 1 %} field-box{% if not field.is_readonly and field.errors %} errors{% endif %}{% endif %}">
-                        {% if not line.fields|length == 1 and not field.is_readonly %}{{ field.errors }}{% endif %}
+                        {% if line.fields|length != 1 and not field.is_readonly %}{{ field.errors }}{% endif %}
                         {% if field.is_checkbox %}
                             <div class="col-sm-2 control-label text-left"></div>
                             <div class="col-sm-9 no-padding-left margin-top-5">{{ field.field }} {{ field.label_tag }}</div>
