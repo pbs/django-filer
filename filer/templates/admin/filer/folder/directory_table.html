@@ -15,13 +15,13 @@
         </thead>
         <tbody>
         {% if not is_popup and folder.is_root and not show_result_count %}
-            {% ifequal paginated_items.number 1 %}
+            {% if paginated_items.number == 1 %}
             {% for subfolder in folder.virtual_folders %}
             <tr class="{% cycle rowcolors %}">
                 {% include "admin/filer/folder/subfolder_row.html" %}
             </tr>
             {% endfor %}
-            {% endifequal %}
+            {% endif %}
         {% endif %}
         {% for item in paginated_items.object_list %}
             {% if item.file_type == 'Folder' or item.file_type == 'DummyFolder' %}
@@ -41,12 +41,12 @@
         {% endfor %}
 
         {% if not folder.is_root %}
-        {% ifequal folder.item_count 0 %}
-        <tr class="{% cycle rowcolors %}">
+        {% if folder.item_count == 0 %}
+            <tr class="{% cycle rowcolors %}">
                 <!-- FileIcon -->
                 <td colspan="5" class="row1" style="text-align: center;vertical-align: middle;height:128px;color: gray;">{% trans "there are no files or subfolders" %}</td>
             </tr>
-        {% endifequal %}
+        {% endif %}
         {% endif %}
         </tbody>
     </table>
