@@ -10,8 +10,8 @@
             <div class="form-row form-group{% if line.fields|length == 1 and line.errors %} errors{% endif %}{% for field in line %} {{ field.field.name }}{% endfor %} no-margin-left no-margin-right">
 
                 {% for field in line %}
-                    <div class="row{% if not line.fields|length == 1 %} field-box{% if not field.is_readonly and field.errors %} errors{% endif %}{% endif %}">
-                        {% if not line.fields|length == 1 and not field.is_readonly %}{{ field.errors }}{% endif %}
+                    <div class="row{% if line.fields|length != 1 %} field-box{% if not field.is_readonly and field.errors %} errors{% endif %}{% endif %}">
+                        {% if line.fields|length != 1 and not field.is_readonly %}{{ field.errors }}{% endif %}
                         {% if field.is_checkbox %}
                             <div class="col-sm-2 control-label text-left"></div>
                             <div class="col-sm-9 no-padding-left margin-top-5">{{ field.field }} {{ field.label_tag }}</div>
