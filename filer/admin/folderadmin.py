@@ -39,6 +39,7 @@ from filer.models import (Folder, FolderRoot, UnfiledImages, File, tools,
 from filer.settings import FILER_STATICMEDIA_PREFIX, FILER_PAGINATE_BY
 from filer.utils.multi_model_qs import MultiMoldelQuerysetChain
 from filer.utils.is_ajax import is_ajax
+from django.utils.translation import ngettext_lazy
 
 
 ELEM_ID = re.compile(r'.*<a href=".*/(?P<file_id>[0-9]+)/.*".*a>$')
@@ -393,8 +394,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 self.get_action_choices(request)
         else:
             action_form = None
-        selection_note_all = gettext_lazy('%(total_count)s selected',
-            'All %(total_count)s selected', paginator.count)
+        selection_note_all = ngettext_lazy(
+            '%(total_count)s selected',
+            'All %(total_count)s selected',
+            paginator.count
+        )
 
         # Make sure page request is an int. If not, deliver first page.
         try:
