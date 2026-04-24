@@ -1,6 +1,6 @@
 #-*- coding: utf-8 -*-
 from django.core.files import File as DjangoFile
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from filer.models.filemodels import File
 from filer.models.foldermodels import Folder
 from filer.models.imagemodels import Image
@@ -126,6 +126,11 @@ class Command(BaseCommand):
             default=False,
             help='Specify the destination folder in which the directory structure should be imported')
 
-    def handle(self, **options):
+    def handle(self, *args, **options):
+        if args:
+            raise CommandError(
+                "This command does not accept positional arguments. "
+                "Use --path and --folder options instead."
+            )
         file_importer = FileImporter(**options)
         file_importer.walker()
