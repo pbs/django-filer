@@ -25,6 +25,7 @@ setup(
     author='Stefan Foulis',
     author_email='stefan.foulis@gmail.com',
     packages=find_packages(),
+    python_requires='>=3.10',
     install_requires=(
         'django>=5.1',
         'django-mptt>=0.6,<1.0',  # the exact version depends on Django
@@ -38,10 +39,16 @@ setup(
     classifiers=[
         'Development Status :: 4 - Beta',
         'Framework :: Django',
+        'Framework :: Django :: 5.1',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+        'Programming Language :: Python :: 3.13',
         'Topic :: Internet :: WWW/HTTP',
     ],
     cmdclass={'test': test},

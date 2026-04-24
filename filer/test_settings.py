@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import importlib.util
 import os
 
 import filer
@@ -29,11 +30,8 @@ INSTALLED_APPS = [
 # Optional CMS-related apps – only add them when they are actually installed.
 _optional_apps = ['cms', 'menus', 'sekizai', 'cmsroles']
 for _app in _optional_apps:
-    try:
-        __import__(_app)
+    if importlib.util.find_spec(_app) is not None:
         INSTALLED_APPS.append(_app)
-    except ImportError:
-        pass
 
 ROOT_URLCONF = 'filer.test_urls'
 SITE_ID = 1
@@ -41,7 +39,6 @@ MEDIA_ROOT = os.path.abspath(os.path.join(TMP_ROOT, 'media'))
 MEDIA_URL = '/media/'
 STATIC_URL = '/static/'
 
-USE_TZ = False  # because of a bug in easy-thumbnails 1.0.3
 
 MIDDLEWARE = [
     'django.middleware.cache.UpdateCacheMiddleware',
@@ -52,20 +49,14 @@ MIDDLEWARE = [
     # 'django.contrib.messages.middleware.MessageMiddleware',
 ]
 
-try:
-    import cms  # noqa: F401
+if importlib.util.find_spec('cms') is not None:
     MIDDLEWARE.append('cms.middleware.user.CurrentUserMiddleware')
     CMS_TEMPLATES = [('cms_mock_template.html', 'cms_mock_template.html')]
     CMS_MODERATOR = True
     CMS_PERMISSION = True
-except ImportError:
-    pass
 
-try:
-    import sekizai  # noqa: F401
+if importlib.util.find_spec('sekizai') is not None:
     SEKIZAI_IGNORE_VALIDATION = True
-except ImportError:
-    pass
 
 CACHE_BACKEND = 'locmem:///'
 
@@ -98,16 +89,10 @@ TEMPLATES = [
 
 # Append optional CMS/sekizai context processors when available.
 _ctx = TEMPLATES[0]['OPTIONS']['context_processors']
-try:
-    import cms  # noqa: F401
+if importlib.util.find_spec('cms') is not None:
     _ctx.append("cms.context_processors.media")
-except ImportError:
-    pass
-try:
-    import sekizai  # noqa: F401
+if importlib.util.find_spec('sekizai') is not None:
     _ctx.append("sekizai.context_processors.sekizai")
-except ImportError:
-    pass
 
 LOGGING = {
     'version': 1,

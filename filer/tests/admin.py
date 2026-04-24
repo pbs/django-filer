@@ -27,16 +27,17 @@ from filer.tests.helpers import (
     filer_obj_as_checkox, get_make_root_folder_url, enable_restriction,
     move_single_file_to_clipboard_action, SettingsOverride
 )
+import importlib.util
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
 from filer.utils.generate_filename import by_path
-try:
+
+HAS_CMSROLES = importlib.util.find_spec("cmsroles") is not None
+if HAS_CMSROLES:
     from cmsroles.models import Role
     from cmsroles.tests.tests import HelpersMixin
     from cmsroles.siteadmin import get_site_admin_required_permission
-    HAS_CMSROLES = True
-except ImportError:
-    HAS_CMSROLES = False
+else:
     Role = None
     HelpersMixin = object
     get_site_admin_required_permission = None
