@@ -1427,7 +1427,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
         }
 
         # Display the resize options page
-        return render("admin/filer/folder/choose_images_resize_options.html", context=context)
+        return render(
+            request,
+            "admin/filer/folder/choose_images_resize_options.html",
+            context=context,
+        )
 
     resize_images.short_description = gettext_lazy("Resize selected images")
 
