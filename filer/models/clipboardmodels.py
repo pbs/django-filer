@@ -29,7 +29,7 @@ class Clipboard(models.Model):
             item.delete()
     empty.alters_data = True
 
-    def __unicode__(self):
+    def __str__(self):
         return "Clipboard %s of %s" % (self.id, self.user)
 
     class Meta:

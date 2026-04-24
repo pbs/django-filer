@@ -26,13 +26,12 @@ setup(
     author_email='stefan.foulis@gmail.com',
     packages=find_packages(),
     install_requires=(
-        'django>=4.2',
+        'django>=5.1',
         'django-mptt>=0.6,<1.0',  # the exact version depends on Django
-        'django_polymorphic==4.0.0',
-        'django-js-asset==2.0.0',
+        'django_polymorphic>=4.0.0',
+        'django-js-asset>=2.0.0',
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
-        'six',
     ),
     include_package_data=True,
     zip_safe=False,
@@ -49,6 +48,5 @@ setup(
     test_suite='setuptest.setuptest.SetupTestSuite',
     tests_require=(
         'django-setuptest>=0.1.1',
-        'argparse',  # apparently needed by django-setuptest on python 2.6
     ),
 )

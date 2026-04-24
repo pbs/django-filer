@@ -38,7 +38,7 @@ def get_deleted_objects(objs, opts, user, admin_site, using):
         opts = obj._meta
 
         no_edit_link = '%s: %s' % (capfirst(opts.verbose_name),
-                                   force_text(obj))
+                                   force_str(obj))
 
         if has_admin:
             try:

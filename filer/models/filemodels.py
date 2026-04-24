@@ -91,7 +91,6 @@ class AliveFileManager(FileManager):
     # this is required in order to make sure that other models that are
     #   related to filer files will get an DoesNotExist exception if the file
     #   is in trash
-    use_for_related_fields = True
 
     def get_queryset(self):
         return super(AliveFileManager, self).get_queryset().filter(
@@ -584,7 +583,7 @@ class File(PolymorphicModel,
         full_path = '{}{}{}'.format(directory_path, os.sep, self.actual_name)
         return full_path
 
-    def __unicode__(self):
+    def __str__(self):
         try:
             name = self.pretty_logical_path
         except:
@@ -740,8 +739,6 @@ class File(PolymorphicModel,
             return can_delete_file and has_role_on_site(user, self.folder.site)
         return False
 
-    def __str__(self):
-        return self.__unicode__()
     class Meta:
         app_label = 'filer'
         verbose_name = _('file')

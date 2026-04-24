@@ -38,7 +38,7 @@ STATIC_URL = '/static/'
 
 USE_TZ = False  # because of a bug in easy-thumbnails 1.0.3
 
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = [
     'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.common.CommonMiddleware',
     # 'django.contrib.sessions.middleware.SessionMiddleware',
@@ -46,7 +46,7 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.csrf.CsrfViewMiddleware',
     # 'django.contrib.messages.middleware.MessageMiddleware',
     'cms.middleware.user.CurrentUserMiddleware',
-)
+]
 
 
 CMS_TEMPLATES = [('cms_mock_template.html', 'cms_mock_template.html')]

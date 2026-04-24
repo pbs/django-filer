@@ -96,7 +96,6 @@ class AliveFolderManager(FolderManager):
     # this is required in order to make sure that other models that are
     #   related to filer folders will get an DoesNotExist exception if the
     #   folder is in trash
-    use_for_related_fields = True
 
     def get_queryset(self):
         return FolderQueryset(self.model, using=self._db).alive()
@@ -478,7 +477,7 @@ class Folder(models.Model, mixins.IconsMixin):
 
     @property
     def quoted_logical_path(self):
-        return urlquote(self.pretty_logical_path)
+        return quote(self.pretty_logical_path)
 
     def get_admin_url_path(self):
         return reverse('admin:filer_folder_change', args=(self.id,))
@@ -486,15 +485,12 @@ class Folder(models.Model, mixins.IconsMixin):
     def get_admin_directory_listing_url_path(self):
         return reverse('admin:filer-directory_listing', args=(self.id,))
 
-    def __unicode__(self):
+    def __str__(self):
         try:
             name = self.pretty_logical_path
         except:
             name = self.name
         return name
-
-    def __str__(self):
-        return self.__unicode__()
 
     @property
     def actual_name(self):
