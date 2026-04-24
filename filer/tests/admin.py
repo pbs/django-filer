@@ -1,6 +1,7 @@
 #-*- coding: utf-8 -*-
 import os
 import tempfile
+import unittest
 import zipfile
 import io
 from django.test import TestCase
@@ -29,9 +30,16 @@ from filer.tests.helpers import (
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
 from filer.utils.generate_filename import by_path
-from cmsroles.models import Role
-from cmsroles.tests.tests import HelpersMixin
-from cmsroles.siteadmin import get_site_admin_required_permission
+try:
+    from cmsroles.models import Role
+    from cmsroles.tests.tests import HelpersMixin
+    from cmsroles.siteadmin import get_site_admin_required_permission
+    HAS_CMSROLES = True
+except ImportError:
+    HAS_CMSROLES = False
+    Role = None
+    HelpersMixin = object
+    get_site_admin_required_permission = None
 import json
 from filer.admin import ClipboardAdmin
 import filer.utils.files
@@ -1195,6 +1203,7 @@ class TestFolderTypePermissionForSuperUser(
             "Operation was expected to fail."
 
 
+@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
 class TestFolderTypePermissionLayerForRegularUser(
     TestCase, BaseTestFolderTypePermissionLayer):
 
@@ -1349,6 +1358,7 @@ class TestFolderTypePermissionLayerForRegularUser(
             "Operation was expected to fail."
 
 
+@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
 class TestSiteFolderRoleFiltering(TestCase, HelpersMixin):
     """
     Tests filer objects site filtering for following:
@@ -1845,6 +1855,7 @@ class TestRestrictionFunctionality(TestCase):
         assert Folder.objects.get(pk=foo.pk).restricted == True
 
 
+@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
 class TestFrozenAssetsPermissions(TestCase):
     """
     Tests folder operations on frozen assets are restricted:
@@ -2083,6 +2094,7 @@ class TestFrozenAssetsPermissions(TestCase):
         assert response.status_code == 302
 
 
+@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
 class TestSharedSitePermissions(TestCase):
     """
     Tests actions on shared folders
@@ -2358,6 +2370,7 @@ class TestSharedFolderFunctionality(TestCase):
             self.assertItemsEqual(desc_folder.shared.all(), [])
 
 
+@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
 class TestAdminTools(TestCase):
     """
     Tests for cases that are not covered by the tests above

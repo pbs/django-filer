@@ -24,11 +24,16 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.sessions',
     'django.contrib.staticfiles',
-    'cms',
-    'menus',
-    'sekizai',
-    'cmsroles',
 ]
+
+# Optional CMS-related apps – only add them when they are actually installed.
+_optional_apps = ['cms', 'menus', 'sekizai', 'cmsroles']
+for _app in _optional_apps:
+    try:
+        __import__(_app)
+        INSTALLED_APPS.append(_app)
+    except ImportError:
+        pass
 
 ROOT_URLCONF = 'filer.test_urls'
 SITE_ID = 1
@@ -45,14 +50,22 @@ MIDDLEWARE = [
     # 'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     # 'django.contrib.messages.middleware.MessageMiddleware',
-    'cms.middleware.user.CurrentUserMiddleware',
 ]
 
+try:
+    import cms  # noqa: F401
+    MIDDLEWARE.append('cms.middleware.user.CurrentUserMiddleware')
+    CMS_TEMPLATES = [('cms_mock_template.html', 'cms_mock_template.html')]
+    CMS_MODERATOR = True
+    CMS_PERMISSION = True
+except ImportError:
+    pass
 
-CMS_TEMPLATES = [('cms_mock_template.html', 'cms_mock_template.html')]
-SEKIZAI_IGNORE_VALIDATION = True
-CMS_MODERATOR = True
-CMS_PERMISSION = True
+try:
+    import sekizai  # noqa: F401
+    SEKIZAI_IGNORE_VALIDATION = True
+except ImportError:
+    pass
 
 CACHE_BACKEND = 'locmem:///'
 
@@ -63,7 +76,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'OPTIONS': {
-            'context_processors': (
+            'context_processors': [
                 "django.contrib.auth.context_processors.auth",
                 'django.contrib.messages.context_processors.messages',
                 "django.template.context_processors.i18n",
@@ -71,10 +84,8 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.template.context_processors.media",
                 'django.template.context_processors.csrf',
-                "cms.context_processors.media",
-                "sekizai.context_processors.sekizai",
                 "django.template.context_processors.static",
-            ),
+            ],
             'loaders': (
                 'filer.tests.utils.MockLoader',
                 'django.template.loaders.filesystem.Loader',
@@ -84,6 +95,19 @@ TEMPLATES = [
         },
     },
 ]
+
+# Append optional CMS/sekizai context processors when available.
+_ctx = TEMPLATES[0]['OPTIONS']['context_processors']
+try:
+    import cms  # noqa: F401
+    _ctx.append("cms.context_processors.media")
+except ImportError:
+    pass
+try:
+    import sekizai  # noqa: F401
+    _ctx.append("sekizai.context_processors.sekizai")
+except ImportError:
+    pass
 
 LOGGING = {
     'version': 1,
