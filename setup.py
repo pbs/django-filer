@@ -33,7 +33,14 @@ setup(
         'django-js-asset>=2.0.0',
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
+        'filetype',
     ),
+    extras_require={
+        's3': [
+            'boto3',
+            'django-storages',
+        ],
+    },
     include_package_data=True,
     zip_safe=False,
     classifiers=[
