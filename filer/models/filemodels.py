@@ -262,13 +262,14 @@ class File(PolymorphicModel,
             # open the file.
             src_file = storage.open(src_file_name)
             src_file.open()
+            file_content = src_file.read()
+            src_file.close()
             # Delete existing file at destination to prevent Django's storage
             # from deduplicating the filename (appending random suffix).
             if storage.exists(destination):
                 storage.delete(destination)
             destination = storage.save(destination,
-                                       ContentFile(src_file.read()))
-            src_file.close()
+                                       ContentFile(file_content))
         self._current_file_location = destination
         self._old_name = self.name
         self._old_folder_id = getattr(self.folder, 'id', None)
