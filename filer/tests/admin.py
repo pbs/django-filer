@@ -143,9 +143,9 @@ class FilerFolderAdminUrlsTests(TestCase):
 
         self.assertEqual(Folder.objects.count(), 2)
         bar = Folder.objects.get(name="bar")
-        response = self.client.post("/admin/filer/folder/%d/" % bar.pk, {
-                "name": "foo",
-                "_popup": 1})
+        response = self.client.post(
+            reverse('admin:filer_folder_change', args=(bar.pk,)),
+            {"name": "foo", "site": bar.site_id, "_popup": 1})
         self.assertIn('folder name is already in use',
                       response.content.decode())
         # refresh from db and validate that it's name didn't change
@@ -214,7 +214,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
         self.assertEqual(Image.objects.count(), 1)
         img_obj = Image.objects.all()[0]
         self.assertEqual(img_obj.actual_name,
-                         '{}_{}.jpeg'.format(img_obj.sha1[:10], img_name))
+                         '{}_{}.jpg'.format(img_obj.sha1[:10], img_name))
         os.remove(image_path)
 
     def test_filer_upload_file(self, extra_headers={}):
@@ -1096,10 +1096,10 @@ class BaseTestFolderTypePermissionLayer(object):
             'post': 'yes',
             'destination': f1.id,
             helpers.ACTION_CHECKBOX_NAME:
-                [filer_obj_as_checkox(folders['bar'])]})
+                [filer_obj_as_checkox(folders['bar'])]}, follow=True)
 
-        assert "The selected destination was not valid, so the selected files and folders "\
-            "were not copied. Please try again." in response.cookies['messages'].value,\
+        messages = [str(m) for m in response.context['messages']]
+        assert any("The selected destination was not valid" in m for m in messages),\
             "Warning message not found in wrong copy response"
         return folders, files
 
@@ -1111,10 +1111,16 @@ class BaseTestFolderTypePermissionLayer(object):
         url = reverse('admin:filer_file_change', args=(file1.id, ))
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn('submit', response.content.decode())
-        self.assertNotIn('delete/', response.content.decode())
-        # only one input(csrfmiddlewaretoken) the rest are readonly fields
-        self.assertEqual(response.content.count('<input'), 1)
+        content = response.content.decode()
+        # No save button should be present (check for submit-row class
+        # used by Django admin for save buttons)
+        self.assertNotIn('submit-row', content)
+        self.assertNotIn('delete/', content)
+        # All form fields should be read-only (rendered as <p> tags, not <input> tags)
+        # The only <input> elements should be csrfmiddlewaretoken (file form + logout form)
+        # plus the nav sidebar filter search input in Django 4.2+
+        # Check that no editable form fields are present
+        self.assertNotIn('id="id_', content)
 
     def test_file_from_site_folder_is_changeable(self):
         f1 = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
@@ -1123,10 +1129,10 @@ class BaseTestFolderTypePermissionLayer(object):
             file=dj_files.base.ContentFile('some data'))
         url = reverse('admin:filer_file_change', args=(file1.id, ))
         response = self.client.get(url)
-        self.assertIn('submit', response.content.decode())
+        self.assertIn('submit-row', response.content.decode())
         self.assertIn('delete/', response.content.decode())
         # at least the choose file and csrfmiddlewaretoken
-        self.assertGreater(response.content.count('<input'), 2)
+        self.assertGreater(response.content.count(b'<input'), 2)
 
     def _build_files_structure_for_archive(self):
         file_structure = {}
@@ -1196,9 +1202,9 @@ class TestFolderTypePermissionForSuperUser(
         foo_root = Folder.objects.create(name='foo_root')
         unfiled_file = File.objects.create(name='unfiled_file', folder=foo_root, restricted=False)
         response, url = enable_restriction(
-            self.client, foo_root, [unfiled_file], follow=False)
-        assert "Successfully enabled restriction for 1 files and/or folders."\
-            in response.cookies['messages'].value,\
+            self.client, foo_root, [unfiled_file], follow=True)
+        messages = [str(m) for m in response.context['messages']]
+        assert any("Successfully enabled restriction" in m for m in messages),\
             "Operation was expected to fail."
 
 
@@ -2523,13 +2529,29 @@ class TestAdminTools(TestCase):
         self.assertEqual(Folder.objects.filter(restricted=False).count(), 0)
 
     def test_truncate_filename_no_extension(self):
-        jpeg_file = io.StringIO('      JFIF') # jpeg signature
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
         jpeg_file.name = '123456789'
         filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=7)
-        self.assertEqual(filename, '1234567.jpeg')
+        self.assertEqual(filename, '1234567.jpg')
 
     def test_truncate_filename_with_extension(self):
-        jpeg_file = io.StringIO('      JFIF') # jpeg signature
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
+        jpeg_file.name = '1234567.jpeg'
+        filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=5)
+        self.assertEqual(filename, '12345.jpeg')
+
+
+class TestTruncateFilename(TestCase):
+    """Tests for truncate_filename that don't require cmsroles."""
+
+    def test_truncate_filename_no_extension(self):
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
+        jpeg_file.name = '123456789'
+        filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=7)
+        self.assertEqual(filename, '1234567.jpg')
+
+    def test_truncate_filename_with_extension(self):
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
         jpeg_file.name = '1234567.jpeg'
         filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=5)
         self.assertEqual(filename, '12345.jpeg')
@@ -2699,7 +2721,8 @@ class TestImageChangeForm(TestCase):
                                   args=(orig_img.pk, ))
                 response = self.client.post(img_url, {
                     'name': another_img_name,
-                    'file': SimpleUploadedFile(new_img.name, new_img.read())
+                    'file': SimpleUploadedFile(new_img.name, new_img.read()),
+                    '_save': '',
                 })
                 orig_img = File.objects.get(id=orig_img.id)
                 self.assertEqual(orig_img.file.name,

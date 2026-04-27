@@ -145,7 +145,7 @@ class FilerApiTests(TestCase):
                               FOLDER_AFFECTS_URL=True):
             folder = Folder(name='foo')
             folder.save()
-            file_obj = DjangoFile(open(self.filename, 'rb'))
+            file_obj = DjangoFile(open(self.filename, 'rb'), name=self.image_name)
             afile = File(name='testfile', folder=folder, file=file_obj)
             afile.save()
             self.assertIn('foo/{}'.format(afile.actual_name), afile.url)

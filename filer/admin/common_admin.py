@@ -173,6 +173,15 @@ class FolderPermissionModelAdmin(CommonModelAdmin):
 
         return folder.has_change_permission(request.user)
 
+    def has_view_permission(self, request, obj=None):
+        # In Django 4.2+, has_view_permission is checked separately from
+        # has_change_permission. Delegate to has_change_permission so that
+        # folders that deny change also deny the read-only view.
+        if obj:
+            return obj.has_change_permission(request.user)
+        return super(FolderPermissionModelAdmin, self).has_view_permission(
+            request, obj)
+
     def has_delete_permission(self, request, obj=None):
         folder = obj
         can_delete = super(FolderPermissionModelAdmin, self).\
@@ -212,6 +221,14 @@ class FilePermissionModelAdmin(CommonModelAdmin):
         if not can_change or not obj:
             return can_change
         return obj.has_change_permission(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        # In Django 4.2+, delegate to has_change_permission so that
+        # files that deny change also deny the read-only view.
+        if obj:
+            return obj.has_change_permission(request.user)
+        return super(FilePermissionModelAdmin, self).has_view_permission(
+            request, obj)
 
     def has_delete_permission(self, request, obj=None):
         can_delete = super(FilePermissionModelAdmin, self).\

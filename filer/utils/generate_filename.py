@@ -44,9 +44,13 @@ def _goes_to_clipboard(instance):
 def by_path(instance, filename):
     if _goes_to_clipboard(instance):
         from filer.models import Clipboard
+        try:
+            owner_name = instance.owner.username if instance.owner else '_missing_owner'
+        except Exception:
+            owner_name = '_missing_owner'
         return os.path.join(
             Clipboard.folder_name,
-            instance.owner.username if instance.owner else '_missing_owner',
+            owner_name,
             filename)
     else:
         return os.path.join(
