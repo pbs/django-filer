@@ -22,7 +22,7 @@ test:
 ## Run tests with verbose output and stop on first failure
 test-verbose: test-build
 	docker run --rm --name $(CONTAINER_NAME) $(IMAGE_NAME) \
-		pytest -vx --ds=filer.test_settings --pyargs filer.tests.__init__
+		pytest -vx --ds=filer.test_settings --pyargs filer.tests
 
 ## Open a shell in the test container (useful for debugging)
 test-shell: test-build
