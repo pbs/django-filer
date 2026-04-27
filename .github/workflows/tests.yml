@@ -1,0 +1,6 @@
+name: Run Tests
+# just a stub workflow file
+on:
+  workflow_call:
+
+  workflow_dispatch:
