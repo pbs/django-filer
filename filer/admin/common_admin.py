@@ -179,8 +179,7 @@ class FolderPermissionModelAdmin(CommonModelAdmin):
         # folders that deny change also deny the read-only view.
         if obj:
             return obj.has_change_permission(request.user)
-        return super(FolderPermissionModelAdmin, self).has_view_permission(
-            request, obj)
+        return request.user.has_perm('filer.can_use_directory_listing')
 
     def has_delete_permission(self, request, obj=None):
         folder = obj
