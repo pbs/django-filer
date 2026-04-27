@@ -33,7 +33,7 @@ jobs:
             --junitxml=pytest-results.xml \
             --ds=filer.test_settings \
             --pyargs \
-            filer.tests.__init__
+            filer.tests
 
       - name: Upload test results
         if: always()
