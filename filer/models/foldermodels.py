@@ -478,7 +478,7 @@ class Folder(models.Model, mixins.IconsMixin):
 
     @property
     def quoted_logical_path(self):
-        return urlquote(self.pretty_logical_path)
+        return quote(self.pretty_logical_path)
 
     def get_admin_url_path(self):
         return reverse('admin:filer_folder_change', args=(self.id,))

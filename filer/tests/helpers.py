@@ -11,7 +11,7 @@ from django.contrib.admin import helpers
 def get_dir_listing_url(folder):
     if folder is None:
         return reverse('admin:filer-directory_listing-root')
-    if folder is 'unfiled':
+    if folder == 'unfiled':
         return reverse('admin:filer-directory_listing-unfiled_images')
     return reverse('admin:filer-directory_listing',
                    kwargs={'folder_id': folder.id})

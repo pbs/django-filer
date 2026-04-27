@@ -264,6 +264,12 @@ FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 
 #     """
 #     pass
 
+_default_roles_manager = 'cmsroles.siteadmin.FilerRolesManager'
+try:
+    import cmsroles  # noqa: F401
+except ImportError:
+    _default_roles_manager = 'filer.utils.cms_roles.DefaultFilerRolesManager'
+
 FILER_ROLES_MANAGER = getattr(settings,
                               'FILER_ROLES_MANAGER',
-                              'cmsroles.siteadmin.FilerRolesManager')
+                              _default_roles_manager)

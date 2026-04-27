@@ -1,5 +1,6 @@
 from django.template.loaders.base import Loader as BaseLoader
-from django.template.base import TemplateDoesNotExist
+from django.template import Origin
+from django.template.exceptions import TemplateDoesNotExist
 
 
 class Mock():
@@ -10,10 +11,21 @@ class MockLoader(BaseLoader):
 
     is_usable = True
 
-    def load_template_source(self, template_name, template_dirs=None):
-        if template_name == 'cms_mock_template.html':
-            return '<div></div>', 'template.html'
-        elif template_name == '404.html':
-            return "404 Not Found", "404.html"
-        else:
-            raise TemplateDoesNotExist()
+    _templates = {
+        'cms_mock_template.html': '<div></div>',
+        '404.html': '404 Not Found',
+    }
+
+    def get_template_sources(self, template_name):
+        if template_name in self._templates:
+            yield Origin(
+                name=template_name,
+                template_name=template_name,
+                loader=self,
+            )
+
+    def get_contents(self, origin):
+        try:
+            return self._templates[origin.template_name]
+        except KeyError:
+            raise TemplateDoesNotExist(origin)
