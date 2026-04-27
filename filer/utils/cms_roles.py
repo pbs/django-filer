@@ -17,7 +17,9 @@ class DefaultFilerRolesManager:
         return user.has_perm(perm)
 
     def get_accessible_sites(self, user):
-        return set(Site.objects.values_list('id', flat=True))
+        if user.is_superuser:
+            return set(Site.objects.values_list('id', flat=True))
+        return set()
 
     def get_administered_sites(self, user):
         if user.is_superuser:
