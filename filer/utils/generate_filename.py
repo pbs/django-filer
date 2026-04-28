@@ -4,6 +4,7 @@ import filer
 
 from filer.utils.files import get_valid_filename
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import UploadedFile
 from django.utils.encoding import smart_str
 
@@ -44,9 +45,13 @@ def _goes_to_clipboard(instance):
 def by_path(instance, filename):
     if _goes_to_clipboard(instance):
         from filer.models import Clipboard
+        try:
+            owner_name = instance.owner.username if instance.owner else '_missing_owner'
+        except (AttributeError, ObjectDoesNotExist):
+            owner_name = '_missing_owner'
         return os.path.join(
             Clipboard.folder_name,
-            instance.owner.username if instance.owner else '_missing_owner',
+            owner_name,
             filename)
     else:
         return os.path.join(

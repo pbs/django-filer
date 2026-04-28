@@ -31,7 +31,7 @@ def create_filer_image_obj(image_name, size=(800, 600), **kwargs):
     image = create_image()
     image_path = os.path.join(os.path.dirname(__file__), image_name)
     image.save(image_path, 'JPEG')
-    file_obj = DjangoFile(open(image_path), name=image_name)
+    file_obj = DjangoFile(open(image_path, 'rb'), name=image_name)
     kwargs.update({
         'original_filename': image_name,
         'file': file_obj
@@ -59,7 +59,7 @@ class FilerApiTests(TestCase):
             f.delete(to_trash=False)
 
     def create_filer_image(self):
-        file_obj = DjangoFile(open(self.filename), name=self.image_name)
+        file_obj = DjangoFile(open(self.filename, 'rb'), name=self.image_name)
         image = Image.objects.create(owner=self.superuser,
                                      original_filename=self.image_name,
                                      file=file_obj)
@@ -80,7 +80,7 @@ class FilerApiTests(TestCase):
 
     def test_upload_image_form(self):
         self.assertEqual(Image.objects.count(), 0)
-        file_obj = DjangoFile(open(self.filename), name=self.image_name)
+        file_obj = DjangoFile(open(self.filename, 'rb'), name=self.image_name)
         ImageUploadForm = modelform_factory(Image, fields=('original_filename', 'owner', 'file'))
         upoad_image_form = ImageUploadForm({'original_filename':self.image_name,
                                             'owner': self.superuser.pk},
@@ -145,7 +145,7 @@ class FilerApiTests(TestCase):
                               FOLDER_AFFECTS_URL=True):
             folder = Folder(name='foo')
             folder.save()
-            file_obj = DjangoFile(open(self.filename))
+            file_obj = DjangoFile(open(self.filename, 'rb'), name=self.image_name)
             afile = File(name='testfile', folder=folder, file=file_obj)
             afile.save()
             self.assertIn('foo/{}'.format(afile.actual_name), afile.url)
@@ -160,7 +160,7 @@ class FilerApiTests(TestCase):
         Test that the file is actualy move from the private to the public
         directory when the is_public is checked on an existing private file.
         """
-        file_obj = DjangoFile(open(self.filename), name=self.image_name)
+        file_obj = DjangoFile(open(self.filename, 'rb'), name=self.image_name)
 
         image = Image.objects.create(owner=self.superuser,
                                      is_public=False,
@@ -388,6 +388,8 @@ class ArchiveTest(TestCase):
 
     def create_and_register_file(self, parent, data):
         fd, path = tempfile.mkstemp(dir=parent)
+        if isinstance(data, str):
+            data = data.encode('utf-8')
         os.write(fd, data)
         os.close(fd)
         self.entries.extend([path])
@@ -403,7 +405,7 @@ class ArchiveTest(TestCase):
         for entry in self.entries:
             zippy.write(entry)
         zippy.close()
-        file_obj = DjangoFile(open(self.zipname), name=self.zipname)
+        file_obj = DjangoFile(open(self.zipname, 'rb'), name=self.zipname)
         filer_zipfile = Archive.objects.create(
             original_filename=self.zipname,
             file=file_obj,
@@ -433,7 +435,7 @@ class TrashableModelTestCase(TestCase):
     def test_files_deletion_is_soft_by_default(self):
         file_foo = File.objects.create(
             original_filename='file.txt',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='file.txt'))
         file_foo.delete()
         self.assertTrue(File.trash.filter(pk=file_foo.pk).exists())
         self.assertFalse(File.objects.filter(pk=file_foo.pk).exists())

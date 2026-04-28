@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import importlib.util
 import os
 
 import filer
@@ -24,11 +25,13 @@ INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.sessions',
     'django.contrib.staticfiles',
-    'cms',
-    'menus',
-    'sekizai',
-    'cmsroles',
 ]
+
+# Optional CMS-related apps – only add them when they are actually installed.
+_optional_apps = ['cms', 'menus', 'sekizai', 'cmsroles']
+for _app in _optional_apps:
+    if importlib.util.find_spec(_app) is not None:
+        INSTALLED_APPS.append(_app)
 
 ROOT_URLCONF = 'filer.test_urls'
 SITE_ID = 1
@@ -36,23 +39,23 @@ MEDIA_ROOT = os.path.abspath(os.path.join(TMP_ROOT, 'media'))
 MEDIA_URL = '/media/'
 STATIC_URL = '/static/'
 
-USE_TZ = False  # because of a bug in easy-thumbnails 1.0.3
-
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = [
     'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.contrib.sessions.middleware.SessionMiddleware',
-    # 'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    # 'django.contrib.messages.middleware.MessageMiddleware',
-    'cms.middleware.user.CurrentUserMiddleware',
-)
+    'django.contrib.messages.middleware.MessageMiddleware',
+]
 
+if importlib.util.find_spec('cms') is not None:
+    MIDDLEWARE.append('cms.middleware.user.CurrentUserMiddleware')
+    CMS_TEMPLATES = [('cms_mock_template.html', 'cms_mock_template.html')]
+    CMS_MODERATOR = True
+    CMS_PERMISSION = True
 
-CMS_TEMPLATES = [('cms_mock_template.html', 'cms_mock_template.html')]
-SEKIZAI_IGNORE_VALIDATION = True
-CMS_MODERATOR = True
-CMS_PERMISSION = True
+if importlib.util.find_spec('sekizai') is not None:
+    SEKIZAI_IGNORE_VALIDATION = True
 
 CACHE_BACKEND = 'locmem:///'
 
@@ -63,7 +66,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'OPTIONS': {
-            'context_processors': (
+            'context_processors': [
                 "django.contrib.auth.context_processors.auth",
                 'django.contrib.messages.context_processors.messages',
                 "django.template.context_processors.i18n",
@@ -71,10 +74,8 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.template.context_processors.media",
                 'django.template.context_processors.csrf',
-                "cms.context_processors.media",
-                "sekizai.context_processors.sekizai",
                 "django.template.context_processors.static",
-            ),
+            ],
             'loaders': (
                 'filer.tests.utils.MockLoader',
                 'django.template.loaders.filesystem.Loader',
@@ -84,6 +85,13 @@ TEMPLATES = [
         },
     },
 ]
+
+# Append optional CMS/sekizai context processors when available.
+_ctx = TEMPLATES[0]['OPTIONS']['context_processors']
+if importlib.util.find_spec('cms') is not None:
+    _ctx.append("cms.context_processors.media")
+if importlib.util.find_spec('sekizai') is not None:
+    _ctx.append("sekizai.context_processors.sekizai")
 
 LOGGING = {
     'version': 1,

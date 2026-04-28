@@ -275,10 +275,10 @@ class Folder(models.Model, mixins.IconsMixin):
             instance_shared_sites = self.shared.values_list('id', flat=True)
             if set(instance_shared_sites) != set(parent_shared_sites):
                 shared_sites = self.parent.shared.all()
-                self.shared = shared_sites
+                self.shared.set(shared_sites)
                 descendants = descendants or self.get_descendants()
                 for desc_folder in descendants:
-                    desc_folder.shared = shared_sites
+                    desc_folder.shared.set(shared_sites)
 
     def save(self, *args, **kwargs):
         if not filer_settings.FOLDER_AFFECTS_URL:
@@ -478,7 +478,7 @@ class Folder(models.Model, mixins.IconsMixin):
 
     @property
     def quoted_logical_path(self):
-        return urlquote(self.pretty_logical_path)
+        return quote(self.pretty_logical_path)
 
     def get_admin_url_path(self):
         return reverse('admin:filer_folder_change', args=(self.id,))

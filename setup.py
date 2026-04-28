@@ -33,6 +33,8 @@ setup(
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
         'six',
+        'filetype',
+        'pytz',
     ),
     include_package_data=True,
     zip_safe=False,

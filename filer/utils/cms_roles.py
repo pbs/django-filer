@@ -7,6 +7,26 @@ from django.utils.module_loading import import_string
 from filer.settings import FILER_ROLES_MANAGER
 
 
+class DefaultFilerRolesManager:
+    """Fallback roles manager used when cmsroles is not installed."""
+
+    def is_site_admin(self, user):
+        return user.is_superuser
+
+    def has_perm_on_site(self, user, site_id, perm):
+        return user.has_perm(perm)
+
+    def get_accessible_sites(self, user):
+        if user.is_superuser:
+            return set(Site.objects.values_list('id', flat=True))
+        return set()
+
+    def get_administered_sites(self, user):
+        if user.is_superuser:
+            return list(Site.objects.all())
+        return []
+
+
 def get_roles_manager():
     if hasattr(get_roles_manager, '_cache'):
         return get_roles_manager._cache

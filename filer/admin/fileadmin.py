@@ -58,6 +58,13 @@ class FileAdmin(FilePermissionModelAdmin):
             return False
         return super(FileAdmin, self).has_change_permission(request, obj)
 
+    def has_view_permission(self, request, obj=None):
+        if not obj:
+            # Block access to the changelist view (Django 4.2+ uses
+            # has_view_permission separately from has_change_permission)
+            return False
+        return super(FileAdmin, self).has_view_permission(request, obj)
+
     def get_model_perms(self, request):
         """
         While this method is used by Django, it is no longer used to determine if the
