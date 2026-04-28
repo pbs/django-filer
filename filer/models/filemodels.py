@@ -175,7 +175,12 @@ class File(PolymorphicModel,
         self._force_commit = False
         # see method _is_path_changed
         self._old_name = self.__dict__.get('name', '')
-        self._current_file_location = self.file.name if self.file else ''
+        # For FileField, the raw value in __dict__ is the file name string
+        file_val = self.__dict__.get('file', '')
+        if file_val and hasattr(file_val, 'name'):
+            self._current_file_location = file_val.name
+        else:
+            self._current_file_location = file_val or ''
         self._old_folder_id = self.__dict__.get('folder_id')
 
     def clean(self):
