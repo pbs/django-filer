@@ -1,10 +1,8 @@
 #-*- coding: utf-8 -*-
-import polymorphic
 import hashlib
 import os
 import filer
 import logging
-import operator
 
 from django.contrib.auth import models as auth_models
 from django.urls import reverse

@@ -1,11 +1,9 @@
-from django.db import models
 from django.contrib import admin
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
 from django.urls import reverse, re_path
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import render, redirect
-from django.template import RequestContext
 from django.http import HttpResponse, Http404
 from filer.utils.multi_model_qs import MultiMoldelQuerysetChain
 from filer.settings import FILER_PAGINATE_BY

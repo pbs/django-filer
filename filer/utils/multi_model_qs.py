@@ -1,4 +1,3 @@
-import itertools
 from functools import reduce
 
 

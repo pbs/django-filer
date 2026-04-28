@@ -3,7 +3,6 @@ from django.forms.models import modelform_factory
 from django.core.exceptions import PermissionDenied
 from django.contrib import admin
 from django.http import HttpResponse, HttpResponseRedirect
-from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import re_path
 from filer import settings as filer_settings
@@ -17,7 +16,6 @@ from filer.views import (
 )
 from filer.admin.tools import is_valid_destination
 from filer.utils.is_ajax import is_ajax
-import os
 import json
 
 # even though the CharField is limited at 255 characters, the filename is used in

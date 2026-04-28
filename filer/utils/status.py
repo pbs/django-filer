@@ -2,7 +2,6 @@ import gc
 import requests
 from collections import defaultdict
 
-from django.contrib.sites.models import Site
 
 from filer.models import File, Folder
 

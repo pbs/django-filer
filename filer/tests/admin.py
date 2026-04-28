@@ -1,16 +1,14 @@
 #-*- coding: utf-8 -*-
 import os
-import tempfile
 import unittest
 import zipfile
 import io
 import json
-import unittest
 from django.test import TestCase
 from django.urls import reverse
 from django.core.exceptions import ValidationError
 from django.core import files as dj_files
-from django.contrib.admin import helpers, site
+from django.contrib.admin import helpers
 from django.contrib.sites.models import Site
 from django.contrib.auth.models import User, Group, Permission
 from django.http import HttpRequest
@@ -24,12 +22,11 @@ from filer.models.virtualitems import FolderRoot
 from filer.models import tools
 from filer.tests.helpers import (
     get_user_message, create_superuser, create_folder_structure,
-    create_image, create_staffuser, create_folder_for_user, move_action,
+    create_image, move_action,
     move_to_clipboard_action, paste_clipboard_to_folder, get_dir_listing_url,
     filer_obj_as_checkox, get_make_root_folder_url, enable_restriction,
     move_single_file_to_clipboard_action, SettingsOverride
 )
-import importlib.util
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
 from filer.utils.generate_filename import by_path

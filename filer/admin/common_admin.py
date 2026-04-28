@@ -8,7 +8,6 @@ from django.http import HttpResponseRedirect
 
 from filer.models import Folder, File
 from filer.admin.tools import (has_admin_role, has_role_on_site,
-                               can_restrict_on_site,
                                has_multi_file_action_permission)
 from filer.views import (popup_param, selectfolder_param, popup_status,
                          selectfolder_status, current_site_param,

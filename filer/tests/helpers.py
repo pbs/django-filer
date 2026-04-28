@@ -1,7 +1,7 @@
 #-*- coding: utf-8 -*-
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageDraw
 
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import User
 from filer.models.foldermodels import Folder
 from filer.models.clipboardmodels import Clipboard, ClipboardItem
 from django.urls import reverse
