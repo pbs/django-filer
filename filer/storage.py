@@ -6,9 +6,9 @@ from django.core.files.storage import FileSystemStorage
 from django.utils.encoding import smart_str
 
 try:
-    import botocore.exceptions
+    from botocore.exceptions import ClientError as BotoClientError
 except ImportError:
-    botocore = None
+    BotoClientError = Exception
 
 try:
     from storages.backends.s3boto import S3BotoStorage
@@ -84,7 +84,7 @@ if S3BotoStorage is not None:
                 extra_args = {
                     'ContentType': source_obj.content_type
                 }
-            except botocore.exceptions.ClientError as error:
+            except BotoClientError as error:
                 logger.warning("Copy: source error: %s", error)
                 return False
             # we cannot preserve acl in boto3, but we can give public read

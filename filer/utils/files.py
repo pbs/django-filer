@@ -86,7 +86,13 @@ def truncate_filename(upload, maxlen=None):
     Pre-extension filename will be less than or equals maxlen(if passed)
     """
     title, extension = os.path.splitext(upload.name)
+    if not extension.lstrip('.'):
+        guessed = filetype.guess_extension(upload) or ''
+        # filetype reads bytes from the upload; seek back for later use
+        if hasattr(upload, 'seek'):
+            upload.seek(0)
+    else:
+        guessed = ''
     filename = '{title}.{ext}'.format(title=title[:maxlen],
-                                      ext=extension.lstrip('.') or
-                                      filetype.extension(upload))
+                                      ext=extension.lstrip('.') or guessed)
     return filename

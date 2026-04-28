@@ -153,10 +153,11 @@ class TrashAdmin(admin.ModelAdmin):
 
         # should not allow view for items that do not have alive container
         container_attr = 'folder' if filer_model == 'file' else 'parent'
-        try:
-            getattr(filer_object, container_attr)
-        except filer.models.Folder.DoesNotExist as e:
-            raise PermissionDenied
+        container_id = getattr(filer_object, container_attr + '_id', None)
+        if container_id:
+            # Check if the container is alive (not trashed) using the alive manager
+            if not filer.models.Folder.objects.filter(id=container_id).exists():
+                raise PermissionDenied
 
         if request.method == 'POST' and request.POST.get('post'):
             filer_object.restore()

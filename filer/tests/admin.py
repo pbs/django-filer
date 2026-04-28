@@ -4,6 +4,8 @@ import tempfile
 import unittest
 import zipfile
 import io
+import json
+import unittest
 from django.test import TestCase
 from django.urls import reverse
 from django.core.exceptions import ValidationError
@@ -31,19 +33,17 @@ import importlib.util
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
 from filer.utils.generate_filename import by_path
+from filer.admin import ClipboardAdmin
+import filer.utils.files
 
-HAS_CMSROLES = importlib.util.find_spec("cmsroles") is not None
-if HAS_CMSROLES:
+try:
     from cmsroles.models import Role
     from cmsroles.tests.tests import HelpersMixin
     from cmsroles.siteadmin import get_site_admin_required_permission
-else:
-    Role = None
+    HAS_CMSROLES = True
+except ImportError:
+    HAS_CMSROLES = False
     HelpersMixin = object
-    get_site_admin_required_permission = None
-import json
-from filer.admin import ClipboardAdmin
-import filer.utils.files
 
 
 class FilerFolderAdminUrlsTests(TestCase):
@@ -72,7 +72,7 @@ class FilerFolderAdminUrlsTests(TestCase):
         response = self.client.post(
             get_make_root_folder_url(),
             data_to_post)
-        self.assertIn('Site is required', response.content)
+        self.assertIn('Site is required', response.content.decode())
 
         data_to_post['site'] = 1
         response = self.client.post(
@@ -100,7 +100,7 @@ class FilerFolderAdminUrlsTests(TestCase):
         response = self.client.post(
             get_make_root_folder_url(),
             post_data)
-        self.assertIn('Site is required', response.content)
+        self.assertIn('Site is required', response.content.decode())
         post_data['site'] = 1
         response = self.client.post(
             get_make_root_folder_url(),
@@ -115,7 +115,7 @@ class FilerFolderAdminUrlsTests(TestCase):
         # second folder didn't get created
         self.assertEqual(Folder.objects.count(), 1)
         self.assertIn('folder name is already in use',
-                      response.content)
+                      response.content.decode())
 
     def test_validate_no_duplicate_folders_on_rename(self):
         self.assertEqual(Folder.objects.count(), 0)
@@ -123,7 +123,7 @@ class FilerFolderAdminUrlsTests(TestCase):
         response = self.client.post(
             get_make_root_folder_url(),
             post_data)
-        self.assertIn('Site is required', response.content)
+        self.assertIn('Site is required', response.content.decode())
         post_data['site'] = 1
         response = self.client.post(
             get_make_root_folder_url(),
@@ -136,7 +136,7 @@ class FilerFolderAdminUrlsTests(TestCase):
         response = self.client.post(
             get_make_root_folder_url(),
             post_data)
-        self.assertIn('Site is required', response.content)
+        self.assertIn('Site is required', response.content.decode())
 
         post_data['site'] = 1
         response = self.client.post(
@@ -145,11 +145,11 @@ class FilerFolderAdminUrlsTests(TestCase):
 
         self.assertEqual(Folder.objects.count(), 2)
         bar = Folder.objects.get(name="bar")
-        response = self.client.post("/admin/filer/folder/%d/" % bar.pk, {
-                "name": "foo",
-                "_popup": 1})
+        response = self.client.post(
+            reverse('admin:filer_folder_change', args=(bar.pk,)),
+            {"name": "foo", "site": bar.site_id, "_popup": 1})
         self.assertIn('folder name is already in use',
-                      response.content)
+                      response.content.decode())
         # refresh from db and validate that it's name didn't change
         bar = Folder.objects.get(pk=bar.pk)
         self.assertEqual(bar.name, "bar")
@@ -205,7 +205,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
         image = create_image()
         image_path = os.path.join(os.path.dirname(__file__), 'image_name')
         image.save(image_path, 'JPEG')
-        file_obj = dj_files.File(open(image_path))
+        file_obj = dj_files.File(open(image_path, 'rb'))
         self.assertEqual(Image.objects.count(), 0)
         response = self.client.post(
             reverse('admin:filer-ajax_upload'), {
@@ -216,12 +216,12 @@ class FilerClipboardAdminUrlsTests(TestCase):
         self.assertEqual(Image.objects.count(), 1)
         img_obj = Image.objects.all()[0]
         self.assertEqual(img_obj.actual_name,
-                         '{}_{}.jpeg'.format(img_obj.sha1[:10], img_name))
+                         '{}_{}.jpg'.format(img_obj.sha1[:10], img_name))
         os.remove(image_path)
 
     def test_filer_upload_file(self, extra_headers={}):
         self.assertEqual(Image.objects.count(), 0)
-        file_obj = dj_files.File(open(self.filename))
+        file_obj = dj_files.File(open(self.filename, 'rb'))
         response = self.client.post(
             reverse('admin:filer-ajax_upload'), {
             'Filename': self.image_name,
@@ -235,7 +235,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
 
     def test_file_upload_no_duplicate_files(self, extra_headers={}):
         self.assertEqual(Image.objects.count(), 0)
-        file_obj = dj_files.File(open(self.filename))
+        file_obj = dj_files.File(open(self.filename, 'rb'))
         response = self.client.post(
             reverse('admin:filer-ajax_upload'), {
             'Filename': self.image_name,
@@ -259,9 +259,9 @@ class FilerClipboardAdminUrlsTests(TestCase):
             **extra_headers
         )
         self.assertEqual(Image.objects.count(), 1)
-        self.assertIn('error', response.content)
+        self.assertIn('error', response.content.decode())
         errormsg = ClipboardAdmin.messages['already-exists'].format(self.image_name)
-        self.assertIn(errormsg, response.content)
+        self.assertIn(errormsg, response.content.decode())
         self.assertEqual(clip.files.count(), 1)
 
     def test_paste_from_clipboard_no_duplicate_files(self):
@@ -269,7 +269,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
             name='first', site=Site.objects.get(id=1))
 
         def upload():
-            file_obj = dj_files.File(open(self.filename))
+            file_obj = dj_files.File(open(self.filename, 'rb'))
             response = self.client.post(
                 reverse('admin:filer-ajax_upload'),
                 {'Filename': self.image_name, 'Filedata': file_obj,
@@ -302,7 +302,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
 
     def test_filer_ajax_upload_file(self):
         self.assertEqual(Image.objects.count(), 0)
-        file_obj = dj_files.File(open(self.filename))
+        file_obj = dj_files.File(open(self.filename, 'rb'))
         response = self.client.post(reverse('admin:filer-ajax_upload') +
             '?filename=%s' % self.image_name,
             data=file_obj.read(),
@@ -325,7 +325,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
         self.assertEqual(Image.objects.count(), 0)
 
         # try to upload
-        file_obj = dj_files.File(open(filename))
+        file_obj = dj_files.File(open(filename, 'rb'))
         response = self.client.post(reverse('admin:filer-ajax_upload') +
                                     '?filename=%s' % long_image_name,
                                     data=file_obj.read(),
@@ -386,7 +386,7 @@ class BulkOperationsMixin(object):
 
     def create_image(self, folder, filename=None):
         filename = filename or 'test_image.jpg'
-        file_obj = dj_files.File(open(self.filename), name=filename)
+        file_obj = dj_files.File(open(self.filename, 'rb'), name=filename)
         image_obj = Image.objects.create(
             owner=self.superuser, original_filename=self.image_name,
             file=file_obj, folder=folder)
@@ -395,8 +395,7 @@ class BulkOperationsMixin(object):
 
     def create_file(self, folder, filename=None):
         filename = filename or 'test_file.dat'
-        file_data = dj_files.base.ContentFile('some data')
-        file_data.name = filename
+        file_data = dj_files.base.ContentFile(b'some data', name=filename)
         file_obj = File.objects.create(owner=self.superuser,
             original_filename=filename, file=file_data, folder=folder)
         file_obj.save()
@@ -433,10 +432,10 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         bar = Folder.objects.create(name='bar', site=Site.objects.get(id=1))
         file_foo = File.objects.create(
             original_filename='file', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         file_bar = File.objects.create(
             original_filename='file', folder=bar,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
 
         response, url = move_action(
             self.client, foo, bar, [file_foo], follow=True)
@@ -660,7 +659,7 @@ class BaseTestFolderTypePermissionLayer(object):
         # make sure the folder that is going to be saved is a site folder
         form = response.context_data['adminform'].form
         self.assertEqual(form.instance.folder_type, Folder.SITE_FOLDER)
-        self.assertItemsEqual(sorted(['name', 'restricted']),
+        self.assertCountEqual(sorted(['name', 'restricted']),
                               sorted(form.fields.keys()))
         # check if save worked
         response = self.client.post(
@@ -760,7 +759,7 @@ class BaseTestFolderTypePermissionLayer(object):
         expected_fields = ['site', 'name']
         if self.user.is_superuser:
             expected_fields.append('shared')
-        self.assertItemsEqual(sorted(expected_fields),
+        self.assertCountEqual(sorted(expected_fields),
                               sorted(form.fields.keys()))
 
         s1, _ = Site.objects.get_or_create(
@@ -846,7 +845,7 @@ class BaseTestFolderTypePermissionLayer(object):
 
         file_bar = File.objects.create(
             original_filename='bar_file', folder=bar,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         _files['file_bar'] = file_bar
         return _folders, _files
 
@@ -877,7 +876,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_to_clipboard_from_root(self):
         file_foo = File.objects.create(
             original_filename='foo', folder=None,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -887,7 +886,7 @@ class BaseTestFolderTypePermissionLayer(object):
 
         file_bar = File.objects.create(
             original_filename='bar', folder=None,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_single_file_to_clipboard_action(
             self.client, 'unfiled', [file_bar])
         self.assertEqual(
@@ -897,7 +896,7 @@ class BaseTestFolderTypePermissionLayer(object):
         foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
         file_foo = File.objects.create(
             original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -907,14 +906,14 @@ class BaseTestFolderTypePermissionLayer(object):
 
         file_bar = File.objects.create(
             original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_to_clipboard_action(self.client, foo, [file_bar])
         self.assertEqual(
             self._get_clipboard_files().count(), 1)
 
         file_baz = File.objects.create(
             original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_single_file_to_clipboard_action(
             self.client, foo, [file_baz])
         self.assertEqual(
@@ -925,7 +924,7 @@ class BaseTestFolderTypePermissionLayer(object):
                                     folder_type=Folder.CORE_FOLDER)
         file_foo = File.objects.create(
             original_filename='foo_file', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
         response, _ = move_to_clipboard_action(self.client, None, [foo])
@@ -944,7 +943,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_clipboard_to_root(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         clipboard, _ = Clipboard.objects.get_or_create(
             user=self.user)
         clipboard.append_file(bar_file)
@@ -959,7 +958,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_clipboard_to_core_folders(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         core_folder = Folder.objects.create(
             name='foo', folder_type=Folder.CORE_FOLDER)
         clipboard, _ = Clipboard.objects.get_or_create(
@@ -976,7 +975,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_clipboard_to_site_folders(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         site_folder = Folder.objects.create(
             name='foo', site=Site.objects.get(id=1))
         clipboard, _ = Clipboard.objects.get_or_create(
@@ -1053,7 +1052,7 @@ class BaseTestFolderTypePermissionLayer(object):
             parent=foo, name='selected', site=Site.objects.get(id=1))
         file_in_selected = File.objects.create(
             folder=selected, original_filename='file_in_selected',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         valid_destination = Folder.objects.create(
             parent=foo, name='valid', site=Site.objects.get(id=1))
 
@@ -1079,7 +1078,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_unfiled(self):
         foo_file = File.objects.create(
             original_filename='foo_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         bar = Folder.objects.create(
             name='bar', site=Site.objects.get(id=1))
         response, url = move_action(self.client, 'unfiled', bar, [foo_file])
@@ -1098,10 +1097,10 @@ class BaseTestFolderTypePermissionLayer(object):
             'post': 'yes',
             'destination': f1.id,
             helpers.ACTION_CHECKBOX_NAME:
-                [filer_obj_as_checkox(folders['bar'])]})
+                [filer_obj_as_checkox(folders['bar'])]}, follow=True)
 
-        assert "The selected destination was not valid, so the selected files and folders "\
-            "were not copied. Please try again." in response.cookies['messages'].value,\
+        messages = [str(m) for m in response.context['messages']]
+        assert any("The selected destination was not valid" in m for m in messages),\
             "Warning message not found in wrong copy response"
         return folders, files
 
@@ -1109,26 +1108,32 @@ class BaseTestFolderTypePermissionLayer(object):
         f1 = Folder.objects.create(name='foo', folder_type=Folder.CORE_FOLDER)
         file1 = File.objects.create(
             original_filename='bar_file', folder=f1,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         url = reverse('admin:filer_file_change', args=(file1.id, ))
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertNotIn('submit', response.content)
-        self.assertNotIn('delete/', response.content)
-        # only one input(csrfmiddlewaretoken) the rest are readonly fields
-        self.assertEqual(response.content.count('<input'), 1)
+        content = response.content.decode()
+        # No save button should be present (check for submit-row class
+        # used by Django admin for save buttons)
+        self.assertNotIn('submit-row', content)
+        self.assertNotIn('delete/', content)
+        # All form fields should be read-only (rendered as <p> tags, not <input> tags)
+        # The only <input> elements should be csrfmiddlewaretoken (file form + logout form)
+        # plus the nav sidebar filter search input in Django 4.2+
+        # Check that no editable form fields are present
+        self.assertNotIn('id="id_', content)
 
     def test_file_from_site_folder_is_changeable(self):
         f1 = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
         file1 = File.objects.create(
             original_filename='bar_file', folder=f1,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         url = reverse('admin:filer_file_change', args=(file1.id, ))
         response = self.client.get(url)
-        self.assertIn('submit', response.content)
-        self.assertIn('delete/', response.content)
+        self.assertIn('submit-row', response.content.decode())
+        self.assertIn('delete/', response.content.decode())
         # at least the choose file and csrfmiddlewaretoken
-        self.assertGreater(response.content.count('<input'), 2)
+        self.assertGreater(response.content.count(b'<input'), 2)
 
     def _build_files_structure_for_archive(self):
         file_structure = {}
@@ -1138,13 +1143,13 @@ class BaseTestFolderTypePermissionLayer(object):
             name='bar', site=Site.objects.get(id=1))
         file_structure['foo_file'] = Archive.objects.create(
             original_filename='foo_file.zip', folder=file_structure['foo'],
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         file_structure['bar_file'] = Archive.objects.create(
             original_filename='bar_file.zip', folder=file_structure['bar'],
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         file_structure['baz_file'] = Archive.objects.create(
             original_filename='baz_file.zip',
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         return file_structure
 
     def test_extract_files_in_core_folder(self):
@@ -1189,7 +1194,7 @@ class TestFolderTypePermissionForSuperUser(
         user = User.objects.create_user(username=username, password=password)
         user.is_superuser = user.is_staff = user.is_active = True
         user.save()
-        user.user_permissions = Permission.objects.all()
+        user.user_permissions.set(Permission.objects.all())
         self.client.login(username=username, password=password)
         self.user = user
 
@@ -1198,13 +1203,13 @@ class TestFolderTypePermissionForSuperUser(
         foo_root = Folder.objects.create(name='foo_root')
         unfiled_file = File.objects.create(name='unfiled_file', folder=foo_root, restricted=False)
         response, url = enable_restriction(
-            self.client, foo_root, [unfiled_file], follow=False)
-        assert "Successfully enabled restriction for 1 files and/or folders."\
-            in response.cookies['messages'].value,\
+            self.client, foo_root, [unfiled_file], follow=True)
+        messages = [str(m) for m in response.context['messages']]
+        assert any("Successfully enabled restriction" in m for m in messages),\
             "Operation was expected to fail."
 
 
-@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
+@unittest.skipUnless(HAS_CMSROLES, 'cmsroles not installed')
 class TestFolderTypePermissionLayerForRegularUser(
     TestCase, BaseTestFolderTypePermissionLayer):
 
@@ -1212,7 +1217,7 @@ class TestFolderTypePermissionLayerForRegularUser(
         foo_base_group = Group.objects.create(name='foo_base_group')
         filer_perms = Permission.objects.filter(
             content_type__app_label='filer')
-        foo_base_group.permissions = filer_perms
+        foo_base_group.permissions.set(filer_perms)
         foo_base_group.save()
         developer_role = Role.objects.create(
             name='foo_role', group=foo_base_group,
@@ -1324,7 +1329,7 @@ class TestFolderTypePermissionLayerForRegularUser(
         foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
         file_foo = File.objects.create(
             original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -1334,14 +1339,14 @@ class TestFolderTypePermissionLayerForRegularUser(
 
         file_bar = File.objects.create(
             original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_to_clipboard_action(self.client, foo, [file_bar])
         self.assertEqual(
             self._get_clipboard_files().count(), 1)
 
         file_baz = File.objects.create(
             original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_single_file_to_clipboard_action(
             self.client, foo, [file_baz])
         self.assertEqual(
@@ -1359,7 +1364,7 @@ class TestFolderTypePermissionLayerForRegularUser(
             "Operation was expected to fail."
 
 
-@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
+@unittest.skipUnless(HAS_CMSROLES, 'cmsroles not installed')
 class TestSiteFolderRoleFiltering(TestCase, HelpersMixin):
     """
     Tests filer objects site filtering for following:
@@ -1401,20 +1406,20 @@ class TestSiteFolderRoleFiltering(TestCase, HelpersMixin):
 
     def _build_folder_structure(self):
         unfiled_file = File.objects.create(original_filename='unfiled_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         foo = Folder.objects.create(name='foo', site=self.foo_site)
         foo_file = File.objects.create(original_filename='foo_file',
-            file=dj_files.base.ContentFile('some data'), folder=foo)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=foo)
         bar = Folder.objects.create(name='bar', site=self.bar_site)
         bar_file = File.objects.create(original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
         none = Folder.objects.create(name='no_site')
         none_file = File.objects.create(original_filename='none_file',
-            file=dj_files.base.ContentFile('some data'), folder=none)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=none)
         core = Folder.objects.create(
             name='core', folder_type=Folder.CORE_FOLDER)
         core_file = File.objects.create(original_filename='core_file',
-            file=dj_files.base.ContentFile('some data'), folder=core)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=core)
 
         return {'foo': foo, 'bar': bar, 'none': none, 'core': core}, {
             'foo_file': foo_file,
@@ -1521,7 +1526,7 @@ class TestSiteFolderRoleFiltering(TestCase, HelpersMixin):
 
         bar2 = Folder.objects.create(name='bar2', site=self.bar_site)
         expected = sorted(['bar', 'bar2', 'foo'])
-        self.assertItemsEqual(expected, self._fetch_destination_names(bar2.pk))
+        self.assertCountEqual(expected, self._fetch_destination_names(bar2.pk))
 
     def test_destination_filtering_for_multi_site_user(self):
         # bob will be a site admin on foo and writer on bar
@@ -1531,14 +1536,14 @@ class TestSiteFolderRoleFiltering(TestCase, HelpersMixin):
         bar2 = Folder.objects.create(name='bar2', site=self.bar_site)
         self.client.login(username='bob', password='secret')
         expected = sorted(['bar', 'bar2', 'foo'])
-        self.assertItemsEqual(expected, self._fetch_destination_names(bar2.pk))
+        self.assertCountEqual(expected, self._fetch_destination_names(bar2.pk))
 
     def test_destination_filtering_for_other_users(self):
         # bob is writer on bar site
         self.client.login(username='bob', password='secret')
         bar2 = Folder.objects.create(name='bar2', site=self.bar_site)
         expected = sorted(['bar', bar2.name])
-        self.assertItemsEqual(expected, self._fetch_destination_names(bar2.pk))
+        self.assertCountEqual(expected, self._fetch_destination_names(bar2.pk))
         bar = Folder.objects.get(name='bar')
         bar.restricted = True
         bar.save()
@@ -1673,12 +1678,12 @@ class TestFolderTypeFunctionality(TestCase):
         response = self.client.post(
             get_make_root_folder_url(),
             {'name': 'bar'})
-        self.assertIn('Site is required', response.content)
+        self.assertIn('Site is required', response.content.decode())
 
         response = self.client.post(
             get_make_root_folder_url(),
             {'name': 'foo'})
-        self.assertIn('name is already in use', response.content)
+        self.assertIn('name is already in use', response.content.decode())
 
     def test_folder_type_conversion_propagate_changes(self):
         site = Site.objects.get(id=1)
@@ -1714,13 +1719,13 @@ class TestValidationOnFileName(TestCase):
         return [
             Archive.objects.create(
                 original_filename='zippy.zip',
-                file=dj_files.base.ContentFile('zippy')),
+                file=dj_files.base.ContentFile(b'zippy', name='data.zip')),
             Image.objects.create(
                 original_filename='image.jpg',
-                file=dj_files.base.ContentFile('image')),
+                file=dj_files.base.ContentFile(b'image', name='image.bin')),
             File.objects.create(
                 original_filename='file.txt',
-                file=dj_files.base.ContentFile('file'))]
+                file=dj_files.base.ContentFile(b'file', name='file.bin'))]
 
     def test_name_with_slash(self):
         files = self._make_file_for_each_type()
@@ -1856,7 +1861,7 @@ class TestRestrictionFunctionality(TestCase):
         assert Folder.objects.get(pk=foo.pk).restricted == True
 
 
-@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
+@unittest.skipUnless(HAS_CMSROLES, 'cmsroles not installed')
 class TestFrozenAssetsPermissions(TestCase):
     """
     Tests folder operations on frozen assets are restricted:
@@ -1879,7 +1884,7 @@ class TestFrozenAssetsPermissions(TestCase):
         filer_perms = Permission.objects.filter(
             content_type__app_label='filer').exclude(
             codename='can_restrict_operations')
-        user.user_permissions = filer_perms
+        user.user_permissions.set(filer_perms)
         self.site = Site.objects.get(id=1)
         self._user_setup(user)
         self.client.login(username=username, password=password)
@@ -1896,11 +1901,11 @@ class TestFrozenAssetsPermissions(TestCase):
     def _build_folder_structure(self):
         foo = Folder.objects.create(
             name='foo', site=self.site, restricted=True)
-        file_obj= DjangoFile(open(self.filename), name=self.image_name)
+        file_obj= DjangoFile(open(self.filename, 'rb'), name=self.image_name)
         foo_file = Image.objects.create(original_filename=self.image_name,
             file=file_obj, folder=foo)
         foo_zippy = Archive.objects.create(original_filename='foo_file.zip',
-            file=dj_files.base.ContentFile('zippy'), folder=foo)
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'), folder=foo)
         assert foo.restricted == foo_file.restricted
         return {'foo': foo}, {'foo_file': foo_file, 'foo_zippy': foo_zippy}
 
@@ -1918,7 +1923,7 @@ class TestFrozenAssetsPermissions(TestCase):
     def test_move_from_clipboard_in_restricted(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         clipboard, _ = Clipboard.objects.get_or_create(user=self.user)
         clipboard.append_file(bar_file)
         response = paste_clipboard_to_folder(
@@ -1953,7 +1958,7 @@ class TestFrozenAssetsPermissions(TestCase):
             name='bar', site=self.site)
         bar_file = File.objects.create(
             original_filename='bar_file', restricted=True,
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
         response = move_single_file_to_clipboard_action(
             self.client, bar, [bar_file])
         self.assertEqual(response.status_code, 403)
@@ -1964,7 +1969,7 @@ class TestFrozenAssetsPermissions(TestCase):
             name='bar1', site=self.site, parent=bar)
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
         response, _ = move_action(
             self.client, bar, self.folders['foo'], [bar_file])
         self.assert_invalid_move_destination_response(response)
@@ -2040,7 +2045,7 @@ class TestFrozenAssetsPermissions(TestCase):
         bar = Folder.objects.create(name='bar', site=self.site)
         bar_file = File.objects.create(
             original_filename='bar_file', restricted=True,
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
 
         url = get_dir_listing_url(bar)
         response = self.client.post(url, {
@@ -2068,7 +2073,7 @@ class TestFrozenAssetsPermissions(TestCase):
         bar = Folder.objects.create(name='bar', site=self.site)
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
 
         url = get_dir_listing_url(bar)
         response = self.client.post(url, {
@@ -2095,7 +2100,7 @@ class TestFrozenAssetsPermissions(TestCase):
         assert response.status_code == 302
 
 
-@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
+@unittest.skipUnless(HAS_CMSROLES, 'cmsroles not installed')
 class TestSharedSitePermissions(TestCase):
     """
     Tests actions on shared folders
@@ -2146,7 +2151,7 @@ class TestSharedSitePermissions(TestCase):
     def test_view_shared_folder(self):
         bar_file = File.objects.create(
             original_filename='bar_file.txt', folder=self.bar,
-            file=dj_files.base.ContentFile('file'))
+            file=dj_files.base.ContentFile(b'file', name='file.bin'))
         resp, items = self.get_listed_objects(None)
         self.assertEqual(set([self.foo, self.bar]), set(items))
         resp, items = self.get_listed_objects(self.bar)
@@ -2210,7 +2215,7 @@ class TestSharedSitePermissions(TestCase):
     def test_move_to_shared_folder(self):
         unfiled_file = File.objects.create(
             original_filename='bar_file.txt',
-            file=dj_files.base.ContentFile('file'))
+            file=dj_files.base.ContentFile(b'file', name='file.bin'))
         response, _ = move_action(
             self.client, 'unfiled', self.bar, [unfiled_file])
         self.assertEqual(File.objects.get(id=unfiled_file.id).folder, None)
@@ -2221,7 +2226,7 @@ class TestSharedSitePermissions(TestCase):
     def test_extract_files_shared_folder(self):
         bar_zippy = Archive.objects.create(
             original_filename='bar_zippy.zip', folder=self.bar,
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         assert Folder.objects.get(id=self.bar.id).files.count() == 1
         url = get_dir_listing_url(self.bar)
         response = self.client.post(url, {
@@ -2233,7 +2238,7 @@ class TestSharedSitePermissions(TestCase):
     def test_move_to_clipboard_from_shared_folder(self):
         bar_file = File.objects.create(
             original_filename='bar_file.txt', folder=self.bar,
-            file=dj_files.base.ContentFile('file'))
+            file=dj_files.base.ContentFile(b'file', name='file.bin'))
         response = move_to_clipboard_action(
             self.client, self.bar, [bar_file])
         self.assertEqual(Clipboard.objects.all().get().files.count(), 0)
@@ -2302,7 +2307,7 @@ class TestSharedFolderFunctionality(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('adminform', response.context_data)
         form = response.context_data['adminform'].form
-        self.assertItemsEqual(
+        self.assertCountEqual(
             sorted(['name', 'restricted', 'shared', 'site']),
             sorted(form.fields.keys()))
 
@@ -2311,7 +2316,7 @@ class TestSharedFolderFunctionality(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('adminform', response.context_data)
         form = response.context_data['adminform'].form
-        self.assertItemsEqual(
+        self.assertCountEqual(
             sorted(['name', 'restricted']), sorted(form.fields.keys()))
 
     def test_shared_sites_are_inherited_on_move(self):
@@ -2330,7 +2335,7 @@ class TestSharedFolderFunctionality(TestCase):
             name='foo').get_descendants()
         for desc_folder in [bar_1, bar_12]:
             self.assertIn(desc_folder, foo_descendants)
-            self.assertItemsEqual(desc_folder.shared.all(), [s1])
+            self.assertCountEqual(desc_folder.shared.all(), [s1])
 
     def test_shared_sites_are_inherited_on_copy(self):
         s1 = Site.objects.create(name='s1', domain='s1.example.com')
@@ -2356,7 +2361,7 @@ class TestSharedFolderFunctionality(TestCase):
             name='bar').get_descendants()
         for desc_folder in [bar_1, bar_12]:
             self.assertIn(desc_folder, bar_descendants)
-            self.assertItemsEqual(desc_folder.shared.all(), [s2])
+            self.assertCountEqual(desc_folder.shared.all(), [s2])
 
         bar_1_copy = Folder.objects.get(name='bar1', parent=foo)
         bar_12_copy = Folder.objects.get(name='bar12', parent=bar_1_copy)
@@ -2364,14 +2369,14 @@ class TestSharedFolderFunctionality(TestCase):
             name='foo').get_descendants(include_self=True)
         for desc_folder in [bar_1_copy, bar_12_copy, foo_1, foo]:
             self.assertIn(desc_folder, foo_descendants)
-            self.assertItemsEqual(desc_folder.shared.all(), [s1])
+            self.assertCountEqual(desc_folder.shared.all(), [s1])
         foo.shared.remove(s1)
         for desc_folder in [bar_1_copy, bar_12_copy, foo_1, foo]:
             self.assertIn(desc_folder, foo_descendants)
-            self.assertItemsEqual(desc_folder.shared.all(), [])
+            self.assertCountEqual(desc_folder.shared.all(), [])
 
 
-@unittest.skipUnless(HAS_CMSROLES, "cmsroles is not installed")
+@unittest.skipUnless(HAS_CMSROLES, 'cmsroles not installed')
 class TestAdminTools(TestCase):
     """
     Tests for cases that are not covered by the tests above
@@ -2433,11 +2438,11 @@ class TestAdminTools(TestCase):
         request.GET['current_site'] = '1'
         request.user = self.user
         from filer.admin.tools import _filter_available_sites, files_available
-        self.assertItemsEqual([1], _filter_available_sites('1', request.user))
+        self.assertCountEqual([1], _filter_available_sites('1', request.user))
         request.GET['current_site'] = 1
-        self.assertItemsEqual([1], _filter_available_sites('1', request.user))
+        self.assertCountEqual([1], _filter_available_sites('1', request.user))
         request.GET['current_site'] = 1
-        self.assertItemsEqual([1], _filter_available_sites('1', request.user))
+        self.assertCountEqual([1], _filter_available_sites('1', request.user))
         request.GET['current_site'] = '2'
         self.assertEqual([], _filter_available_sites('2', request.user))
         f1 = File.objects.create(original_filename='foo_file')
@@ -2525,13 +2530,29 @@ class TestAdminTools(TestCase):
         self.assertEqual(Folder.objects.filter(restricted=False).count(), 0)
 
     def test_truncate_filename_no_extension(self):
-        jpeg_file = io.StringIO('      JFIF') # jpeg signature
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
         jpeg_file.name = '123456789'
         filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=7)
-        self.assertEqual(filename, '1234567.jpeg')
+        self.assertEqual(filename, '1234567.jpg')
 
     def test_truncate_filename_with_extension(self):
-        jpeg_file = io.StringIO('      JFIF') # jpeg signature
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
+        jpeg_file.name = '1234567.jpeg'
+        filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=5)
+        self.assertEqual(filename, '12345.jpeg')
+
+
+class TestTruncateFilename(TestCase):
+    """Tests for truncate_filename that don't require cmsroles."""
+
+    def test_truncate_filename_no_extension(self):
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
+        jpeg_file.name = '123456789'
+        filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=7)
+        self.assertEqual(filename, '1234567.jpg')
+
+    def test_truncate_filename_with_extension(self):
+        jpeg_file = io.BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF')  # jpeg signature
         jpeg_file.name = '1234567.jpeg'
         filename = filer.utils.files.truncate_filename(jpeg_file, maxlen=5)
         self.assertEqual(filename, '12345.jpeg')
@@ -2637,7 +2658,7 @@ class TestMPTTCorruptionsOnFolderOperations(TestCase):
 
         filer_zipfile = Archive.objects.create(
             original_filename='zip_file.zip', folder=self.src_folder,
-            file=dj_files.File(open(zip_file_path), name='zip_file.zip'),
+            file=dj_files.File(open(zip_file_path, 'rb'), name='zip_file.zip'),
         )
         self.client.post(get_dir_listing_url(self.src_folder), {
             'action': 'extract_files',
@@ -2661,7 +2682,7 @@ class TestImageChangeForm(TestCase):
         image = create_image()
         image_path = os.path.join(os.path.dirname(__file__), image_name)
         image.save(image_path, 'JPEG')
-        file_obj = DjangoFile(open(image_path), name=image_name)
+        file_obj = DjangoFile(open(image_path, 'rb'), name=image_name)
         kwargs.update({'original_filename': image_name, 'file': file_obj})
         image = Image.objects.create(**kwargs)
         os.remove(image_path)
@@ -2701,7 +2722,8 @@ class TestImageChangeForm(TestCase):
                                   args=(orig_img.pk, ))
                 response = self.client.post(img_url, {
                     'name': another_img_name,
-                    'file': SimpleUploadedFile(new_img.name, new_img.read())
+                    'file': SimpleUploadedFile(new_img.name, new_img.read()),
+                    '_save': '',
                 })
                 orig_img = File.objects.get(id=orig_img.id)
                 self.assertEqual(orig_img.file.name,
@@ -2792,7 +2814,7 @@ class TrashAdminTests(TestCase):
         image = create_image()
         image_path = os.path.join(os.path.dirname(__file__), image_name)
         image.save(image_path, 'JPEG')
-        file_obj = DjangoFile(open(image_path), name=image_name)
+        file_obj = DjangoFile(open(image_path, 'rb'), name=image_name)
         kwargs.update({
             'original_filename': image_name,
             'file': file_obj
@@ -2863,7 +2885,7 @@ class TestImageFiltering(TestCase):
         self.site = Site.objects.first()
         self.foo = Folder.objects.create(
             name='foo', site=self.site, restricted=True)
-        file_obj= DjangoFile(open(self.filename), name=self.image_name)
+        file_obj= DjangoFile(open(self.filename, 'rb'), name=self.image_name)
         self.foo_image = Image.objects.create(original_filename=self.image_name,
                                               file=file_obj, folder=self.foo)
         self.foo_file = File.objects.create(original_filename=self.image_name,

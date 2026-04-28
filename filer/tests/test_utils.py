@@ -6,7 +6,7 @@ from django.core.files import File as DjangoFile
 from django.test.testcases import TestCase
 from filer.tests.helpers import create_image
 
-from filer.utils.loader import load
+from filer.utils.loader import load_object
 from filer.utils.zip import unzip
 
 #===============================================================================
@@ -22,20 +22,21 @@ class TestTargetClass(TestTargetSuperClass):
 # Testing the classloader
 #===============================================================================
 class ClassLoaderTestCase(TestCase):
-    ''' Tests filer.utils.loader.load() '''
+    ''' Tests filer.utils.loader.load_object() '''
 
     def test_loader_loads_strings_properly(self):
-        target = 'filer.tests.utils.TestTargetClass'
-        result = load(target, None) # Should return an instance
-        self.assertEqual(result.__class__, TestTargetClass)
+        target = 'filer.tests.test_utils.TestTargetClass'
+        result = load_object(target)
+        self.assertEqual(result, TestTargetClass)
 
-    def test_loader_loads_class(self):
-        result = load(TestTargetClass(), TestTargetSuperClass)
-        self.assertEqual(result.__class__, TestTargetClass)
+    def test_loader_returns_non_string_as_is(self):
+        instance = TestTargetClass()
+        result = load_object(instance)
+        self.assertIs(result, instance)
 
-    def test_loader_loads_subclass(self):
-        result = load(TestTargetClass, TestTargetSuperClass)
-        self.assertEqual(result.__class__, TestTargetClass)
+    def test_loader_raises_on_no_dots(self):
+        with self.assertRaises(TypeError):
+            load_object('NoDots')
 
 #===============================================================================
 # Testing the zipping/unzipping of files
@@ -50,7 +51,7 @@ class ZippingTestCase(TestCase):
                                  self.image_name)
         self.img.save(self.filename, 'JPEG')
 
-        self.file = DjangoFile(open(self.filename), name=self.image_name)
+        self.file = DjangoFile(open(self.filename, 'rb'), name=self.image_name)
 
         self.zipfilename = 'test_zip.zip'
 

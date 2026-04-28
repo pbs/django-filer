@@ -33,7 +33,9 @@ setup(
         'django-js-asset>=2.0.0',
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
+        'six',
         'filetype',
+        'pytz',
     ),
     extras_require={
         's3': [
@@ -62,5 +64,6 @@ setup(
     test_suite='setuptest.setuptest.SetupTestSuite',
     tests_require=(
         'django-setuptest>=0.1.1',
+        'argparse',  # apparently needed by django-setuptest on python 2.6
     ),
 )

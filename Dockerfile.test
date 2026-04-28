@@ -1,0 +1,16 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system deps needed for building Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the full source and install
+COPY . .
+RUN pip install --no-cache-dir pytest pytest-django filetype pytz "Django>=5.1,<5.2" && \
+    pip install --no-cache-dir -e .
+
+
+CMD ["pytest", "--ds=filer.test_settings", "filer/tests/"]
+

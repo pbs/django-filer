@@ -168,13 +168,15 @@ class File(PolymorphicModel,
 
     def __init__(self, *args, **kwargs):
         super(File, self).__init__(*args, **kwargs)
-        self._old_is_public = self.is_public
-        self._old_sha1 = self.sha1
+        # Use __dict__ to avoid triggering deferred field loading
+        # which can cause recursion in Django 5.1+ (from_db calls __init__)
+        self._old_is_public = self.__dict__.get('is_public', self.is_public)
+        self._old_sha1 = self.__dict__.get('sha1', '')
         self._force_commit = False
         # see method _is_path_changed
-        self._old_name = self.name
-        self._current_file_location = self.file.name
-        self._old_folder_id = self.folder_id
+        self._old_name = self.__dict__.get('name', '')
+        self._current_file_location = self.file.name if self.file else ''
+        self._old_folder_id = self.__dict__.get('folder_id')
 
     def clean(self):
         if self.name:
@@ -236,7 +238,7 @@ class File(PolymorphicModel,
         src_file = src_storage.open(src_file_name)
         src_file.open()
         self.file = dst_storage.save(dst_file_name,
-            ContentFile(src_file.read()))
+            ContentFile(src_file.read(), name=os.path.basename(dst_file_name)))
         src_file.close()
         src_storage.delete(src_file_name)
 
@@ -261,9 +263,14 @@ class File(PolymorphicModel,
             # open the file.
             src_file = storage.open(src_file_name)
             src_file.open()
-            destination = storage.save(destination,
-                                       ContentFile(src_file.read()))
+            file_content = src_file.read()
             src_file.close()
+            # Delete existing file at destination to prevent Django's storage
+            # from deduplicating the filename (appending random suffix).
+            if storage.exists(destination):
+                storage.delete(destination)
+            destination = storage.save(destination,
+                                       ContentFile(file_content, name=os.path.basename(destination)))
         self._current_file_location = destination
         self._old_name = self.name
         self._old_folder_id = getattr(self.folder, 'id', None)
@@ -310,7 +317,7 @@ class File(PolymorphicModel,
             pass
         replaced_file = self._old_sha1 != self.sha1
         if filer_settings.FOLDER_AFFECTS_URL and (self._is_path_changed() or replaced_file):
-            if replaced_file:
+            if replaced_file and not self._is_name_changed():
                 self.name = None  # if new file submitted for same id we overwrite what was previously in name
             self._force_commit = True
             self.update_location_on_storage(*args, **kwargs)
@@ -318,6 +325,12 @@ class File(PolymorphicModel,
             super(File, self).save(*args, **kwargs)
 
     save.alters_data = True
+
+    def _is_name_changed(self):
+        """Check if the file name was explicitly changed by the user."""
+        if self._old_name in ('', None):
+            return self.name not in ('', None)
+        return self._old_name != self.name
 
     def _is_path_changed(self):
         """
@@ -353,7 +366,7 @@ class File(PolymorphicModel,
             #   filer file instance save
             self.file.storage.save(self._current_file_location, self.file)
             self._old_sha1 = self.sha1
-        new_location = self.file.field.upload_to(self, self.actual_name)
+        new_location = self.file.field.upload_to(self, self.upload_to_name)
         storage = self.file.storage
 
         def copy_and_save():
@@ -457,11 +470,16 @@ class File(PolymorphicModel,
         basename, extension = os.path.splitext(self.clean_actual_name)
         if self.folder:
             files = self.folder.files
-        elif self.owner:
-            files = filer.models.tools.get_user_clipboard(self.owner).files.all()
         else:
-            from filer.models.virtualitems import UnfiledImages
-            files = UnfiledImages().files
+            try:
+                owner = self.owner
+            except auth_models.User.DoesNotExist:
+                owner = None
+            if owner:
+                files = filer.models.tools.get_user_clipboard(self.owner).files.all()
+            else:
+                from filer.models.virtualitems import UnfiledImages
+                files = UnfiledImages().files
         existing_file_names = [f.clean_actual_name for f in files]
         i = 1
         while self.clean_actual_name in existing_file_names:
@@ -511,8 +529,11 @@ class File(PolymorphicModel,
             self.file.name = new_location
             # restore to user clipboard
             if self.owner_id and not self.folder_id:
-                clipboard = filer.models.tools.get_user_clipboard(self.owner)
-                clipboard.append_file(File.objects.get(id=self.id))
+                try:
+                    clipboard = filer.models.tools.get_user_clipboard(self.owner)
+                    clipboard.append_file(File.objects.get(id=self.id))
+                except auth_models.User.DoesNotExist:
+                    pass
 
     @property
     def label(self):

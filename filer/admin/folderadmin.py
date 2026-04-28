@@ -203,11 +203,18 @@ class FolderAdmin(FolderPermissionModelAdmin):
         #   request is a POST from a popup view and the response is a
         #   successed HttpResponse
         if (request.method == 'POST' and popup_status(request) and
-            response.status_code == 200 and
             not isinstance(response, HttpResponseRedirect)):
-            return HttpResponse('<script type="text/javascript">' +
-                                'opener.dismissPopupAndReload(window);' +
-                                '</script>')
+            # In Django 4.2+, a successful popup add returns status 200 with
+            # dismiss script.  A form validation error also returns 200 but
+            # with a re-rendered form.  Only show dismiss when there are no
+            # form errors (i.e. no 'errorlist' in the rendered content).
+            if hasattr(response, 'render'):
+                response = response.render()
+            content = getattr(response, 'content', b'')
+            if response.status_code == 200 and b'errorlist' not in content:
+                return HttpResponse('<script type="text/javascript">' +
+                                    'opener.dismissPopupAndReload(window);' +
+                                    '</script>')
         return response
 
     def delete_view(self, request, object_id, extra_context=None):

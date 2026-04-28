@@ -38,15 +38,15 @@ SITE_ID = 1
 MEDIA_ROOT = os.path.abspath(os.path.join(TMP_ROOT, 'media'))
 MEDIA_URL = '/media/'
 STATIC_URL = '/static/'
-
+USE_TZ = False
 
 MIDDLEWARE = [
     'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.contrib.sessions.middleware.SessionMiddleware',
-    # 'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    # 'django.contrib.messages.middleware.MessageMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
 ]
 
 if importlib.util.find_spec('cms') is not None:

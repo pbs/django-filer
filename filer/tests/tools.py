@@ -19,7 +19,7 @@ class ToolsTestCase(TestCase):
                                  self.image_name)
         self.img.save(self.filename, 'JPEG')
 
-        self.file = DjangoFile(open(self.filename), name=self.image_name)
+        self.file = DjangoFile(open(self.filename, 'rb'), name=self.image_name)
         # This is actually a "file" for filer considerations
         self.image = Image.objects.create(owner=self.superuser,
                                      original_filename=self.image_name,

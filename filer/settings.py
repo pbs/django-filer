@@ -40,7 +40,13 @@ FILER_FILE_MODELS = getattr(settings, 'FILER_FILE_MODELS',
     )
 )
 
-DEFAULT_FILE_STORAGE = getattr(settings, 'DEFAULT_FILE_STORAGE', 'django.core.files.storage.FileSystemStorage')
+# Django 5.1+ uses STORAGES; fall back to the legacy DEFAULT_FILE_STORAGE for
+# older versions.
+try:
+    DEFAULT_FILE_STORAGE = settings.STORAGES['default']['BACKEND']
+except (AttributeError, KeyError):
+    DEFAULT_FILE_STORAGE = getattr(settings, 'DEFAULT_FILE_STORAGE',
+                                   'django.core.files.storage.FileSystemStorage')
 
 MINIMAL_FILER_STORAGES = {
     'public': {
@@ -264,6 +270,12 @@ FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 
 #     """
 #     pass
 
+_default_roles_manager = 'cmsroles.siteadmin.FilerRolesManager'
+try:
+    import cmsroles  # noqa: F401
+except ImportError:
+    _default_roles_manager = 'filer.utils.cms_roles.DefaultFilerRolesManager'
+
 FILER_ROLES_MANAGER = getattr(settings,
                               'FILER_ROLES_MANAGER',
-                              'cmsroles.siteadmin.FilerRolesManager')
+                              _default_roles_manager)
