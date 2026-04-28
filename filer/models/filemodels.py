@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.core.files.base import ContentFile
 from django.core.exceptions import ValidationError
 from django.db import (models, IntegrityError, transaction)
+from django.db.models import DEFERRED
 from django.utils.translation import gettext_lazy as _
 from filer.fields.multistorage_file import MultiStorageFileField
 from filer.models import mixins
@@ -167,19 +168,30 @@ class File(PolymorphicModel,
     def __init__(self, *args, **kwargs):
         super(File, self).__init__(*args, **kwargs)
         # Use __dict__ to avoid triggering deferred field loading
-        # which can cause recursion in Django 5.1+ (from_db calls __init__)
-        self._old_is_public = self.__dict__.get('is_public', self.is_public)
-        self._old_sha1 = self.__dict__.get('sha1', '')
+        # which can cause recursion in Django 5.1+ (from_db calls __init__).
+        # Django stores the DEFERRED sentinel in __dict__ for deferred fields
+        # rather than omitting the key, so we must normalize it to a safe
+        # default to avoid false positives in change-detection comparisons.
+        raw_is_public = self.__dict__.get('is_public', DEFERRED)
+        self._old_is_public = (
+            self.is_public if raw_is_public is DEFERRED else raw_is_public
+        )
+        raw_sha1 = self.__dict__.get('sha1', DEFERRED)
+        self._old_sha1 = '' if raw_sha1 is DEFERRED else raw_sha1
         self._force_commit = False
         # see method _is_path_changed
-        self._old_name = self.__dict__.get('name', '')
+        raw_name = self.__dict__.get('name', DEFERRED)
+        self._old_name = '' if raw_name is DEFERRED else raw_name
         # For FileField, the raw value in __dict__ is the file name string
         file_val = self.__dict__.get('file', '')
+        if file_val is DEFERRED:
+            file_val = ''
         if file_val and hasattr(file_val, 'name'):
             self._current_file_location = file_val.name
         else:
             self._current_file_location = file_val or ''
-        self._old_folder_id = self.__dict__.get('folder_id')
+        raw_folder_id = self.__dict__.get('folder_id', DEFERRED)
+        self._old_folder_id = None if raw_folder_id is DEFERRED else raw_folder_id
 
     def clean(self):
         if self.name:
