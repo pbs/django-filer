@@ -173,9 +173,15 @@ class File(PolymorphicModel,
         # rather than omitting the key, so we must normalize it to a safe
         # default to avoid false positives in change-detection comparisons.
         raw_is_public = self.__dict__.get('is_public', DEFERRED)
-        self._old_is_public = (
-            self.is_public if raw_is_public is DEFERRED else raw_is_public
-        )
+        if raw_is_public is DEFERRED:
+            if self.pk is not None:
+                self._old_is_public = self.__class__.all_objects.filter(
+                    pk=self.pk
+                ).values_list('is_public', flat=True).first()
+            else:
+                self._old_is_public = False
+        else:
+            self._old_is_public = raw_is_public
         raw_sha1 = self.__dict__.get('sha1', DEFERRED)
         self._old_sha1 = '' if raw_sha1 is DEFERRED else raw_sha1
         self._force_commit = False
