@@ -40,13 +40,10 @@ FILER_FILE_MODELS = getattr(settings, 'FILER_FILE_MODELS',
     )
 )
 
-# Django 5.1+ uses STORAGES; fall back to the legacy DEFAULT_FILE_STORAGE for
-# older versions.
-try:
-    DEFAULT_FILE_STORAGE = settings.STORAGES['default']['BACKEND']
-except (AttributeError, KeyError):
-    DEFAULT_FILE_STORAGE = getattr(settings, 'DEFAULT_FILE_STORAGE',
-                                   'django.core.files.storage.FileSystemStorage')
+if hasattr(settings, "STORAGES") and 'default' in settings.STORAGES:
+    DEFAULT_FILE_STORAGE = settings.STORAGES['default'].get('BACKEND', 'django.core.files.storage.FileSystemStorage')
+else:
+    DEFAULT_FILE_STORAGE = getattr(settings, 'DEFAULT_FILE_STORAGE', 'django.core.files.storage.FileSystemStorage')
 
 MINIMAL_FILER_STORAGES = {
     'public': {
