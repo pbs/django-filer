@@ -132,5 +132,10 @@ class Command(BaseCommand):
                 "This command does not accept positional arguments. "
                 "Use --path and --folder options instead."
             )
+        if not options.get('path'):
+            raise CommandError(
+                "The --path option is required. "
+                "Use --path to specify the directory to import."
+            )
         file_importer = FileImporter(**options)
         file_importer.walker()
