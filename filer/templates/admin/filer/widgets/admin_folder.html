@@ -1,22 +1,24 @@
-{% load i18n filer_admin_tags filermedia %}{% spaceless %}
-<img src="{% filer_staticmedia_prefix %}icons/plainfolder_48x48.png" class="quiet" alt="{% trans 'no folder selected' %}" />&nbsp;<span id="{{ span_id }}">{% if object %}{{ object.pretty_logical_path }}{% else %}{% trans 'none selected' %}{% endif %}</span>
-<a href="{{ lookup_url }}" class="related-lookup" id="lookup_id_{{ lookup_name }}" title="{% trans 'Lookup' %}" onclick="return showRelatedFilerObjectLookupPopup(this);">
-	<img src="{% admin_icon_base %}icon_searchbox.png" width="16" height="16" alt="{% trans 'Lookup' %}" />
-</a>
-<i id="{{ clear_id }}" {% if not object %} style="display: none;"{% endif %} class="ace-icon fa fa-times red"></i>
-<br />
-{{ hidden_input }}
-<script type="text/javascript">django.jQuery("#{{ id }}").hide();
-django.jQuery("#{{ clear_id }}").click(function(){
-    django.jQuery("#{{ id }}").removeAttr("value");
-    django.jQuery("#{{ foldid }}").attr("src", "{{ noimg }}");
-    django.jQuery("#{{ descid }}").html("{% trans 'none selected' %}");
-});
-django.jQuery(document).ready(function(){
-    var plus = django.jQuery("#add_{{ id }}");
-    if (plus.length){
-        plus.remove();
-    }
-});
-</script>
+{% load i18n filer_admin_tags static %}
+
+{% spaceless %}
+    <div class="filer-dropzone filer-dropzone-folder">
+        <span class="filerFile">
+            <a href="{{ lookup_url }}" class="related-lookup{% if object %} hidden{% endif %}" id="{{ lookup_name }}" title="{% trans 'Lookup' %}">
+                <span class="fa fa-search cms-icon cms-icon-search"></span>&nbsp;
+                {% trans "Choose Folder" %}
+            </a>
+            <img src="{% static "filer/icons/folder.svg" %}" class="thumbnail_img{% if not object %} hidden{% endif %}"/>
+            <span id="{{ span_id }}" style="margin-left: 15px;">
+                <span class="description_text">
+                    {% if object %}
+                        {{ object.pretty_logical_path }}
+                    {% endif %}
+                </span>
+            </span>
+            <a class="filerClearer {% if not object %}hidden{% endif %}" id="{{ clear_id }}" title="{% translate 'Clear' %}" href="#">
+                <span class="fa fa-close filer-icon filer-icon-remove-selection"></span>
+            </a>
+            <div class="hidden">{{ hidden_input }}</div>
+        </span>
+    </div>
 {% endspaceless %}

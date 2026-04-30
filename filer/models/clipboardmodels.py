@@ -1,22 +1,36 @@
-#-*- coding: utf-8 -*-
+from django.conf import settings
 from django.contrib.auth import models as auth_models
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from filer.models import filemodels
+
+from . import filemodels
 
 
 class Clipboard(models.Model):
     user = models.OneToOneField(
-        auth_models.User, verbose_name=_('user'), related_name="filer_clipboard",  on_delete=models.CASCADE
+        getattr(settings, 'AUTH_USER_MODEL', 'auth.User'),
+        verbose_name=_('user'),
+        related_name="filer_clipboard",
+        on_delete=models.CASCADE,
     )
+
     files = models.ManyToManyField(
-        'File', verbose_name=_('files'), related_name="in_clipboards",
-        through='ClipboardItem')
+        'File',
+        verbose_name=_('files'),
+        related_name="in_clipboards",
+        through='ClipboardItem',
+    )
+
+    # PBS-specific: folder_name used for clipboard upload paths
     folder_name = "_clipboard"
+
+    class Meta:
+        app_label = 'filer'
+        verbose_name = _("clipboard")
+        verbose_name_plural = _("clipboards")
 
     def append_file(self, file_obj):
         try:
-            # We have to check if file is already in the clipboard as otherwise polymorphic complains
             self.files.get(pk=file_obj.pk)
             return False
         except filemodels.File.DoesNotExist:
@@ -30,19 +44,23 @@ class Clipboard(models.Model):
     empty.alters_data = True
 
     def __str__(self):
-        return "Clipboard %s of %s" % (self.id, self.user)
-
-    class Meta:
-        app_label = 'filer'
-        verbose_name = _('clipboard')
-        verbose_name_plural = _('clipboards')
+        return f"Clipboard {self.id} of {self.user}"
 
 
 class ClipboardItem(models.Model):
-    file = models.ForeignKey('File', verbose_name=_('file'), on_delete=models.CASCADE)
-    clipboard = models.ForeignKey(Clipboard, verbose_name=_('clipboard'), on_delete=models.CASCADE)
+    file = models.ForeignKey(
+        'File',
+        verbose_name=_("file"),
+        on_delete=models.CASCADE,
+    )
+
+    clipboard = models.ForeignKey(
+        Clipboard,
+        verbose_name=_("clipboard"),
+        on_delete=models.CASCADE,
+    )
 
     class Meta:
         app_label = 'filer'
-        verbose_name = _('clipboard item')
-        verbose_name_plural = _('clipboard items')
+        verbose_name = _("clipboard item")
+        verbose_name_plural = _("clipboard items")

@@ -1,30 +1,82 @@
-#-*- coding: utf-8 -*-
 from django import forms
-from django.utils.translation import gettext  as _
-from django.shortcuts import render
-from django.http import Http404
-from django.urls import re_path
-from filer.admin.fileadmin import FileAdmin
-from filer.models import Image
-from filer.views import (popup_status, selectfolder_status)
+from django.shortcuts import get_object_or_404
+from django.template.response import TemplateResponse
+from django.urls import path
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
+
+from ..settings import FILER_IMAGE_MODEL
+from ..thumbnail_processors import normalize_subject_location
+from ..utils.compatibility import string_concat
+from ..utils.loader import load_model
+from .fileadmin import FileAdmin, FileAdminChangeFrom
 
 
-class ImageAdminForm(forms.ModelForm):
+Image = load_model(FILER_IMAGE_MODEL)
+
+
+class ImageAdminForm(FileAdminChangeFrom):
     subject_location = forms.CharField(
-                    max_length=64, required=False,
-                    label=_('Subject location'),
-                    help_text=_('Location of the main subject of the scene.'))
+        max_length=64, required=False,
+        label=_('Subject location'),
+        help_text=_('Location of the main subject of the scene. '
+                    'Format: "x,y".'))
 
     def sidebar_image_ratio(self):
         if self.instance:
             # this is very important. It forces the value to be returned as a
-            # string and always with a "." as seperator. If the conversion
+            # string and always with a "." as separator. If the conversion
             # from float to string is done in the template, the locale will
             # be used and in some cases there would be a "," instead of ".".
             # javascript would parse that to an integer.
-            return  "%.6F" % self.instance.sidebar_image_ratio()
+            return '%.6F' % self.instance.sidebar_image_ratio()
         else:
             return ''
+
+    def _set_previous_subject_location(self, cleaned_data):
+        subject_location = self.instance.subject_location
+        cleaned_data['subject_location'] = subject_location
+        self.data = self.data.copy()
+        self.data['subject_location'] = subject_location
+
+    def clean_subject_location(self):
+        """
+        Validate subject_location preserving last saved value.
+
+        Last valid value of the subject_location field is shown to the user
+        for subject location widget to receive valid coordinates on field
+        validation errors.
+        """
+        subject_location = self.cleaned_data['subject_location']
+        if not subject_location:
+            # if supplied subject location is empty, do not check it
+            return subject_location
+
+        # use thumbnail's helper function to check the format
+        coordinates = normalize_subject_location(subject_location)
+
+        if not coordinates:
+            err_msg = gettext_lazy('Invalid subject location format. ')
+            err_code = 'invalid_subject_format'
+
+        elif (
+            coordinates[0] > self.instance.width > 0
+            or coordinates[1] > self.instance.height > 0
+        ):
+            err_msg = gettext_lazy(
+                'Subject location is outside of the image. ')
+            err_code = 'subject_out_of_bounds'
+        else:
+            return subject_location
+
+        self._set_previous_subject_location(self.cleaned_data)
+        raise forms.ValidationError(
+            string_concat(
+                err_msg,
+                gettext_lazy('Your input: "{subject_location}". '.format(
+                    subject_location=subject_location)),
+                'Previous value is restored.'),
+            code=err_code)
 
     class Meta:
         model = Image
@@ -32,32 +84,38 @@ class ImageAdminForm(forms.ModelForm):
 
 
 class ImageAdmin(FileAdmin):
+    change_form_template = 'admin/filer/image/change_form.html'
     form = ImageAdminForm
 
     def get_urls(self):
-        urls = super(ImageAdmin, self).get_urls()
-        url_patterns = [
-            re_path(r'^(?P<file_id>\d+)/full_size_preview/$',
-                self.admin_site.admin_view(self.full_size_preview),
-                name='filer-image-preview'),
+        return super().get_urls() + [
+            path("expand/<int:file_id>",
+                 self.admin_site.admin_view(self.expand_view),
+                 name=f"{self.opts.app_label}_{self.opts.model_name}_expand")
         ]
-        url_patterns.extend(urls)
-        return url_patterns
 
-    def full_size_preview(self, request, file_id):
-        try:
-            image = Image.objects.get(id=file_id)
-        except Image.DoesNotExist:
-            raise Http404
+    def expand_view(self, request, file_id):
+        image = get_object_or_404(self.model, pk=file_id)
+        return TemplateResponse(
+            request,
+            "admin/filer/image/expand.html",
+            context={
+                "original_url": image.url
+            },
+        )
 
-        return render(request, 'admin/filer/image/full_size_preview.html', {
-                'image': image,
-                'current_site': request.GET.get('current_site', None),
-                'is_popup': popup_status(request),
-                'select_folder': selectfolder_status(request),
-                })
+
+if FILER_IMAGE_MODEL == 'filer.Image':
+    extra_main_fields = ('author', 'default_alt_text', 'default_caption',)
+else:
+    extra_main_fields = ('default_alt_text', 'default_caption',)
 
 ImageAdmin.fieldsets = ImageAdmin.build_fieldsets(
-    extra_main_fields=('default_alt_text', 'default_caption', 'default_credit'),
-    extra_fieldsets=()
+    extra_main_fields=extra_main_fields,
+    extra_fieldsets=(
+        (_('Subject location'), {
+            'fields': ('subject_location',),
+            'classes': ('collapse',),
+        }),
+    )
 )

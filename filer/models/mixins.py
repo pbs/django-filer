@@ -1,10 +1,13 @@
-#-*- coding: utf-8 -*-
-from filer.settings import FILER_ADMIN_ICON_SIZES, FILER_STATICMEDIA_PREFIX
+import warnings
+
 from django.db import models
+from django.templatetags.static import static
 from django.utils.translation import gettext_lazy as _
 
+from ..settings import FILER_ADMIN_ICON_SIZES
 
-class IconsMixin(object):
+
+class IconsMixin:
     """
     Can be used on any model that has a _icon attribute. will return a dict
     containing urls for icons of different sizes with that name.
@@ -14,11 +17,15 @@ class IconsMixin(object):
         r = {}
         if getattr(self, '_icon', False):
             for size in FILER_ADMIN_ICON_SIZES:
-                r[size] = "%sicons/%s_%sx%s.png" % (
-                            FILER_STATICMEDIA_PREFIX, self._icon, size, size)
+                try:
+                    r[size] = static("filer/icons/{}_{}x{}.png".format(
+                        self._icon, size, size))
+                except ValueError:
+                    pass
         return r
 
 
+# PBS-specific: trashable decorator
 def trashable(cls):
 
     deleted_at = models.DateTimeField(

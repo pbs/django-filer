@@ -1,23 +1,103 @@
-#-*- coding: utf-8 -*-
-from django.contrib.sites.models import Site
-from django.contrib.auth import models as auth_models
-from django.urls import reverse
-from django.core.exceptions import ValidationError
-from django.db import (models, IntegrityError, transaction)
-from django.db.models import (query, Q, signals, DEFERRED)
-from django.dispatch import receiver
-from django.utils.translation import gettext_lazy as _
-from urllib.parse import quote
-from filer.utils.cms_roles import *
-from filer.models import mixins
-from filer import settings as filer_settings
-from django.utils import timezone
-import mptt
 import itertools
+import logging
+
+from django.conf import settings
+from django.contrib.auth import models as auth_models
+from django.contrib.sites.models import Site
+from django.core.exceptions import ValidationError
+from django.db import models, IntegrityError, transaction
+from django.db.models import Q, query, signals, DEFERRED
+from django.dispatch import receiver
+from django.urls import reverse
+from django.utils.functional import cached_property
+from django.utils.html import format_html, format_html_join
+from django.utils.translation import gettext
+from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+from urllib.parse import quote
+
+import mptt
+
+from .. import settings as filer_settings
+from ..cache import get_folder_permission_cache, update_folder_permission_cache
+from ..utils.cms_roles import (
+    get_sites_for_user,
+    get_sites_without_restriction_perm,
+    has_admin_role,
+    has_admin_role_on_site,
+    has_role_on_site,
+    can_restrict_on_site,
+)
+from . import mixins
+
 import filer
 
 
-class FoldersChainableQuerySetMixin(object):
+logger = logging.getLogger(__name__)
+
+
+class FolderPermissionManager(models.Manager):
+    """
+    These methods are called by introspection from "has_generic_permission" on
+    the folder model.
+    """
+    def get_read_id_list(self, user):
+        return self.__get_id_list(user, "can_read")
+
+    def get_edit_id_list(self, user):
+        return self.__get_id_list(user, "can_edit")
+
+    def get_add_children_id_list(self, user):
+        return self.__get_id_list(user, "can_add_children")
+
+    def __get_id_list(self, user, attr):
+        if user.is_superuser or not filer_settings.FILER_ENABLE_PERMISSIONS:
+            return 'All'
+        cached_id_list = get_folder_permission_cache(user, attr)
+        if cached_id_list:
+            return cached_id_list
+
+        allow_list = set()
+        deny_list = set()
+        group_ids = user.groups.all().values_list('id', flat=True)
+        q = Q(user=user) | Q(group__in=group_ids) | Q(everybody=True)
+        perms = self.filter(q)
+
+        for perm in perms:
+            p = getattr(perm, attr)
+
+            if p is None:
+                continue
+
+            if not perm.folder:
+                assert perm.type == FolderPermission.ALL
+
+                if p == FolderPermission.ALLOW:
+                    allow_list.update(Folder.objects.all().values_list('id', flat=True))
+                else:
+                    deny_list.update(Folder.objects.all().values_list('id', flat=True))
+                continue
+
+            folder_id = perm.folder.id
+
+            if p == FolderPermission.ALLOW:
+                allow_list.add(folder_id)
+            else:
+                deny_list.add(folder_id)
+
+            if perm.type in [FolderPermission.ALL, FolderPermission.CHILDREN]:
+                if p == FolderPermission.ALLOW:
+                    allow_list.update(perm.folder.get_descendants_ids())
+                else:
+                    deny_list.update(perm.folder.get_descendants_ids())
+
+        id_list = allow_list - deny_list
+        update_folder_permission_cache(user, attr, id_list)
+        return id_list
+
+
+# PBS-specific: chainable queryset mixin with trash/restriction support
+class FoldersChainableQuerySetMixin:
 
     def with_bad_metadata(self):
         return self.filter(has_all_mandatory_data=False)
@@ -54,10 +134,8 @@ class FoldersChainableQuerySetMixin(object):
                 descendant_filter |= q
         if not descendant_filter:
             return self.none()
-        # since this method is called to check permissions on descendants it
-        #   should only query the alive assets
         restr_q = Q(Q(restricted=True) | Q(
-                        Q(all_files__restricted=True) & \
+                        Q(all_files__restricted=True) &
                         Q(all_files__deleted_at__isnull=True)))
         restr_q &= Q(site__in=sites)
         return self.model.objects.filter(
@@ -76,8 +154,7 @@ class FoldersChainableQuerySetMixin(object):
         return self.filter(deleted_at__isnull=True)
 
 
-class FolderQueryset(query.QuerySet,
-                     FoldersChainableQuerySetMixin):
+class FolderQueryset(query.QuerySet, FoldersChainableQuerySetMixin):
     pass
 
 
@@ -93,16 +170,11 @@ class FolderManager(models.Manager):
 
 
 class AliveFolderManager(FolderManager):
-    # this is required in order to make sure that other models that are
-    #   related to filer folders will get an DoesNotExist exception if the
-    #   folder is in trash
-
     def get_queryset(self):
         return FolderQueryset(self.model, using=self._db).alive()
 
 
 class TrashFolderManager(FolderManager):
-
     def get_queryset(self):
         return FolderQueryset(self.model, using=self._db).in_trash()
 
@@ -118,12 +190,12 @@ class Folder(models.Model, mixins.IconsMixin):
     in this way. Make sure the linked models obey the AbstractFile interface
     (Duck Type).
     """
-
     file_type = 'Folder'
     is_root = False
     can_have_subfolders = True
     _icon = 'plainfolder'
 
+    # PBS-specific: folder types
     SITE_FOLDER = 0
     CORE_FOLDER = 1
 
@@ -132,58 +204,113 @@ class Folder(models.Model, mixins.IconsMixin):
         CORE_FOLDER: 'Core Folder',
     }
 
-    parent = models.ForeignKey('self', verbose_name=('parent'), null=True,
-                               blank=True, related_name='children', on_delete=models.CASCADE)
-    name = models.CharField(_('name'), max_length=255)
+    parent = models.ForeignKey(
+        'self',
+        verbose_name=_('parent'),
+        null=True,
+        blank=True,
+        related_name='children',
+        on_delete=models.CASCADE,
+    )
 
-    owner = models.ForeignKey(auth_models.User, verbose_name=('owner'),
-                              related_name='filer_owned_folders',
-                              on_delete=models.SET_NULL,
-                              null=True, blank=True)
+    name = models.CharField(
+        _('name'),
+        max_length=255,
+    )
 
-    uploaded_at = models.DateTimeField(_('uploaded at'), auto_now_add=True)
+    owner = models.ForeignKey(
+        getattr(settings, 'AUTH_USER_MODEL', 'auth.User'),
+        verbose_name=_('owner'),
+        related_name='filer_owned_folders',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
 
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
-    modified_at = models.DateTimeField(_('modified at'), auto_now=True)
+    uploaded_at = models.DateTimeField(
+        _('uploaded at'),
+        auto_now_add=True,
+    )
 
-    folder_type = models.IntegerField(choices=list(FOLDER_TYPES.items()),
-                                      default=SITE_FOLDER)
+    created_at = models.DateTimeField(
+        _('created at'),
+        auto_now_add=True,
+    )
 
-    site = models.ForeignKey(Site, null=True, blank=True,
-                             on_delete=models.SET_NULL,
-                             help_text=_("Select the site which will use "
-                                         "this folder."))
+    modified_at = models.DateTimeField(
+        _('modified at'),
+        auto_now=True,
+    )
+
+    # PBS-specific fields
+    folder_type = models.IntegerField(
+        choices=list(FOLDER_TYPES.items()),
+        default=SITE_FOLDER,
+    )
+
+    site = models.ForeignKey(
+        Site,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        help_text=_("Select the site which will use this folder."),
+    )
 
     restricted = models.BooleanField(
         _("Restrict Editors and Writers from being able to edit "
-          "or delete anything from this folder"), default=False,
+          "or delete anything from this folder"),
+        default=False,
         help_text=_('If this box is checked, '
                     'Editors and Writers will still be able to '
                     'view this folder assets, add them to a plugin or smart '
                     'snippet but will not be able to delete or '
-                    'modify the current version of the assets.'))
+                    'modify the current version of the assets.'),
+    )
 
-    shared = models.ManyToManyField(Site, blank=True,
+    shared = models.ManyToManyField(
+        Site,
+        blank=True,
         related_name='shared',
         verbose_name=_("Share folder with sites"),
         help_text=_("All the sites which you share this folder with will "
                     "be able to use this folder on their pages, with all of "
                     "its assets. However, they will not be able to change, "
-                    "delete or move it, not even add new assets."))
+                    "delete or move it, not even add new assets."),
+    )
 
+    # PBS-specific: trash managers
     objects = AliveFolderManager()
     trash = TrashFolderManager()
     all_objects = FolderManager()
 
+    class Meta:
+        ordering = ('name',)
+        permissions = (
+            ("can_use_directory_listing", "Can use directory listing"),
+            ("can_restrict_operations", "Can restrict files or folders"),
+        )
+        app_label = 'filer'
+        verbose_name = _("Folder")
+        verbose_name_plural = _("Folders")
+
     def __init__(self, *args, **kwargs):
-        super(Folder, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if self.__dict__.get('name', DEFERRED) is not DEFERRED:
             self._old_name = self.name
         if self.__dict__.get('parent_id', DEFERRED) is not DEFERRED:
             self._old_parent_id = self.parent_id
 
-    def clean(self):
+    def __str__(self):
+        try:
+            name = self.pretty_logical_path
+        except:
+            name = self.name
+        return name
 
+    def __repr__(self):
+        return f'<{self.__class__.__name__}(pk={self.pk}): {self.name}>'
+
+    def clean(self):
         if self.name == filer.models.clipboardmodels.Clipboard.folder_name:
             raise ValidationError(
                 _('%s is reserved for internal use. '
@@ -196,8 +323,7 @@ class Folder(models.Model, mixins.IconsMixin):
             parent=self.parent_id,
             name=self.name)
         if self.pk:
-            duplicate_folders_q = duplicate_folders_q.exclude(
-                pk=self.pk)
+            duplicate_folders_q = duplicate_folders_q.exclude(pk=self.pk)
 
         if duplicate_folders_q.exists():
             raise ValidationError(
@@ -206,24 +332,16 @@ class Folder(models.Model, mixins.IconsMixin):
 
         if not self.parent:
             if (self.folder_type == Folder.SITE_FOLDER and
-                not self.site):
+                    not self.site):
                 raise ValidationError('Folder is a Site folder. '
                                       'Site is required.')
             if (self.folder_type == Folder.CORE_FOLDER and not self.parent and
-                self.site):
+                    self.site):
                 raise ValidationError('Folder is a Core folder. '
                                       'Site must be empty.')
 
     def set_metadata_from_parent(self):
-        """
-        This will keep the rules:
-           * site for site folders can be changed only for the folders
-                with no parent(root folders)
-           * core folders should not have any site
-           * if parent restricted keep restriction from parent
-        """
         if self.parent:
-            # site folders - make sure it keeps the site from parent
             self.site = self.parent.site
             self.folder_type = self.parent.folder_type
             if self.parent.restricted:
@@ -238,7 +356,6 @@ class Folder(models.Model, mixins.IconsMixin):
         if not self.pk:
             return True
         metadata_fields = ['restricted', 'site_id', 'folder_type']
-        # metadata should be preserved for trashed folder too
         old_metadata = self.__class__.all_objects.\
                  filter(pk=self.pk).values(*metadata_fields).get()
         for field in metadata_fields:
@@ -251,10 +368,6 @@ class Folder(models.Model, mixins.IconsMixin):
                 self._old_parent_id != getattr(self, 'parent_id', None))
 
     def update_descendants_metadata(self):
-        """
-        Folder type and restriction should be preserved
-            to all descendants
-        """
         descendants = None
         if self._update_descendants:
             descendants = self.get_descendants()
@@ -282,7 +395,7 @@ class Folder(models.Model, mixins.IconsMixin):
     def save(self, *args, **kwargs):
         if not filer_settings.FOLDER_AFFECTS_URL:
             self.set_metadata_from_parent()
-            super(Folder, self).save(*args, **kwargs)
+            super().save(*args, **kwargs)
             self.update_descendants_metadata()
             return
 
@@ -297,12 +410,11 @@ class Folder(models.Model, mixins.IconsMixin):
         try:
             with transaction.atomic(savepoint=False):
                 self.set_metadata_from_parent()
-                super(Folder, self).save(*args, **kwargs)
+                super().save(*args, **kwargs)
                 self.update_descendants_metadata()
                 if self.is_affecting_file_paths():
                     desc_ids = list(self.get_descendants(
                         include_self=True).values_list('id', flat=True))
-                    # update location only for alive files
                     file_mgr = filer.models.filemodels.File.objects
                     all_files = file_mgr.filter(folder__in=desc_ids)
                     for f in all_files:
@@ -318,34 +430,29 @@ class Folder(models.Model, mixins.IconsMixin):
         else:
             delete_from_locations(old_locations, storages)
 
+    # PBS-specific: trash methods
     def soft_delete(self):
         deletion_time = timezone.now()
         desc_ids = list(self.get_descendants(
             include_self=True).values_list('id', flat=True))
-        # soft delete all alive files
         file_mgr = filer.models.filemodels.File.objects
         files_qs = file_mgr.filter(folder__in=desc_ids)
         for filer_file in files_qs:
             filer_file.soft_delete(deletion_time=deletion_time)
-        # soft delete all alive folders
         Folder.objects.filter(
             id__in=desc_ids).update(deleted_at=deletion_time)
         self.deleted_at = deletion_time
 
     def hard_delete(self):
-        # This would happen automatically by ways of the delete
-        #       cascade, but then the individual .delete() methods
-        #       won't be called and the files won't be deleted
-        #       from the filesystem.
         desc_ids = list(self.get_descendants(
             include_self=True).values_list('id', flat=True))
         file_mgr = filer.models.filemodels.File.all_objects
         for file_obj in file_mgr.filter(folder__in=desc_ids):
             file_obj.hard_delete()
-        super(Folder, self).delete()
+        super().delete()
 
     def delete(self, *args, **kwargs):
-        super(Folder, self).delete_restorable(*args, **kwargs)
+        super().delete_restorable(*args, **kwargs)
     delete.alters_data = True
 
     def _generate_valid_name_for_restore(self):
@@ -358,12 +465,6 @@ class Folder(models.Model, mixins.IconsMixin):
         return name
 
     def restore_path(self):
-        """
-        This method makes this folder path to be a valid destination for
-            for restoring files/sub-folders.
-        * it restores all the trashed folders in this folder's path.
-        * files from the folders in path will not be restored.
-        """
         trashed_ancestors = self.get_ancestors(include_self=True).filter(
             deleted_at__isnull=False)
         first_node_trashed = trashed_ancestors[:1]
@@ -376,11 +477,7 @@ class Folder(models.Model, mixins.IconsMixin):
             trashed_ancestors.update(deleted_at=None)
 
     def restore(self):
-        """
-            Restores all files and subfolders contained in this folder.
-        """
         self.restore_path()
-        # add self since it was restored with restore_path method
         desc_ids = [self.id]
         descendants = self.get_descendants(include_self=True).filter(
             deleted_at__isnull=False)
@@ -389,7 +486,6 @@ class Folder(models.Model, mixins.IconsMixin):
             Folder.trash.filter(id=descendant.id).update(
                 deleted_at=None, name=new_name)
             desc_ids.append(descendant.id)
-        # restore self and descendants files
         file_mgr = filer.models.filemodels.File.trash
         files_qs = file_mgr.filter(folder__in=desc_ids)
         for filer_file in files_qs:
@@ -434,9 +530,6 @@ class Folder(models.Model, mixins.IconsMixin):
         return filer.models.File.objects.filter(folder=self)
 
     def entries_with_names(self, names):
-        """Returns an iterator yielding the files and folders that are direct
-        children of this folder and have their names in the given list of names.
-        """
         q = Q(name__in=names)
         q |= Q(original_filename__in=names) & (Q(name__isnull=True) | Q(name=''))
         files_with_names = filer.models.File.objects.filter(
@@ -446,21 +539,22 @@ class Folder(models.Model, mixins.IconsMixin):
         return list(itertools.chain(files_with_names, folders_with_names))
 
     def pretty_path_entries(self):
-        """Returns a list of all the descendant's `alive` entries logical path"""
         subdirs = self.get_descendants(include_self=True).filter(
             deleted_at__isnull=True)
         subdir_files = filer.models.File.objects.filter(folder__in=subdirs)
         file_paths = [x.pretty_logical_path for x in subdir_files]
         dir_paths = [x.pretty_logical_path for x in subdirs]
-        paths = file_paths + dir_paths
-        return paths
+        return file_paths + dir_paths
+
+    def get_descendants_ids(self):
+        desc = []
+        for child in self.children.all():
+            desc.append(child.id)
+            desc.extend(child.get_descendants_ids())
+        return desc
 
     @property
     def logical_path(self):
-        """
-        Gets logical path of the folder in the tree structure.
-        Used to generate breadcrumbs
-        """
         folder_path = []
         try:
             if self.parent:
@@ -479,22 +573,58 @@ class Folder(models.Model, mixins.IconsMixin):
     def quoted_logical_path(self):
         return quote(self.pretty_logical_path)
 
+    # Upstream permission methods
+    def has_edit_permission(self, request):
+        return request.user.has_perm("filer.change_folder") and self.has_generic_permission(request, 'edit')
+
+    def has_read_permission(self, request):
+        return self.has_generic_permission(request, 'read')
+
+    def has_add_children_permission(self, request):
+        return request.user.has_perm("filer.change_folder") and self.has_generic_permission(request, 'add_children')
+
+    def has_generic_permission(self, request, permission_type):
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        elif user.is_superuser:
+            return True
+        elif user == self.owner:
+            return True
+        else:
+            if not hasattr(self, "permission_cache") or\
+               permission_type not in self.permission_cache or \
+               request.user.pk != self.permission_cache['user'].pk:
+                if not hasattr(self, "permission_cache") or request.user.pk != self.permission_cache['user'].pk:
+                    self.permission_cache = {
+                        'user': request.user,
+                    }
+                func = getattr(FolderPermission.objects,
+                               "get_%s_id_list" % permission_type)
+                permission = func(user)
+                if permission == "All":
+                    self.permission_cache[permission_type] = True
+                    self.permission_cache['read'] = True
+                    self.permission_cache['edit'] = True
+                    self.permission_cache['add_children'] = True
+                else:
+                    self.permission_cache[permission_type] = self.id in permission
+            return self.permission_cache[permission_type]
+
+    def get_admin_change_url(self):
+        return reverse('admin:filer_folder_change', args=(self.id,))
+
     def get_admin_url_path(self):
         return reverse('admin:filer_folder_change', args=(self.id,))
 
     def get_admin_directory_listing_url_path(self):
         return reverse('admin:filer-directory_listing', args=(self.id,))
 
-    def __str__(self):
-        try:
-            name = self.pretty_logical_path
-        except:
-            name = self.name
-        return name
-
-    @property
-    def actual_name(self):
-        return self.name
+    def get_admin_delete_url(self):
+        return reverse(
+            f'admin:{self._meta.app_label}_{self._meta.model_name}_delete',
+            args=(self.pk,)
+        )
 
     def contains_folder(self, folder_name):
         try:
@@ -504,11 +634,16 @@ class Folder(models.Model, mixins.IconsMixin):
             return False
 
     @property
+    def actual_name(self):
+        return self.name
+
+    @property
     def get_folder_type_display(self):
         if self.shared.exists():
             return 'Shared by site'
         return Folder.FOLDER_TYPES[self.folder_type]
 
+    # PBS-specific: site/core permission methods
     def is_core(self):
         return self.folder_type == Folder.CORE_FOLDER
 
@@ -524,9 +659,6 @@ class Folder(models.Model, mixins.IconsMixin):
             not can_restrict_on_site(user, self.site)))
 
     def can_change_restricted(self, user):
-        """
-        Checks if restriction operation is available for this folder.
-        """
         perm = 'filer.can_restrict_operations'
         if (not (user.has_perm(perm, self) or user.has_perm(perm)) or
                 not can_restrict_on_site(user, self.site)):
@@ -534,7 +666,6 @@ class Folder(models.Model, mixins.IconsMixin):
         if not self.parent:
             return True
         if self.parent.restricted == self.restricted == True:
-            # only parent can be set to True
             return False
         if self.parent.restricted == self.restricted == False:
             return True
@@ -545,33 +676,25 @@ class Folder(models.Model, mixins.IconsMixin):
         return True
 
     def has_add_permission(self, user):
-        # nobody can add subfolders in core folders
         if (self.is_readonly_for_user(user) or
                 self.is_restricted_for_user(user)):
             return False
-        # only site admins can add subfolders in site folders with no site
         if not self.site and has_admin_role(user):
             return True
-        # regular users need to have permissions to add folders and
-        #   need to have a role over the site owner of the folder
         if not self.site or not has_role_on_site(user, self.site):
             return False
         perm = 'filer.add_folder'
         return user.has_perm(perm, self.site) or user.has_perm(perm)
 
     def has_change_permission(self, user):
-        # nobody can change core folder
         if (self.is_readonly_for_user(user) or
                 self.is_restricted_for_user(user)):
             return False
-        # only admins can change site folders with no site owner
         if not self.site and has_admin_role(user):
             return True
-
         if not self.site:
             return False
         if not self.parent:
-            # only site admins can change root site folders
             return has_admin_role_on_site(user, self.site)
         perm = 'filer.change_folder'
         return ((user.has_perm(perm, self.site) or user.has_perm(perm)) and
@@ -581,29 +704,16 @@ class Folder(models.Model, mixins.IconsMixin):
         if (self.is_readonly_for_user(user) or
                 self.is_restricted_for_user(user)):
             return False
-
-        # only super users can delete site folders with no site owner
         if not self.site and user.is_superuser:
             return True
-
         if not self.site:
             return False
         if not self.parent:
-            # only site admins can delete root site folders
             return has_admin_role_on_site(user, self.site)
         perm = 'filer.delete_folder'
         return ((user.has_perm(perm, self.site) or user.has_perm(perm)) and
                 has_role_on_site(user, self.site))
 
-    class Meta:
-        ordering = ('name',)
-        permissions = (("can_use_directory_listing",
-                        "Can use directory listing"),
-                       ("can_restrict_operations",
-                        "Can restrict files or folders"),)
-        app_label = 'filer'
-        verbose_name = _("Folder")
-        verbose_name_plural = _("Folders")
 
 # MPTT registration
 try:
@@ -626,3 +736,150 @@ def update_shared_sites_for_descendants(instance, **kwargs):
     descendants = instance.get_descendants()
     for desc_folder in descendants:
         desc_folder.shared.set(sites)
+
+
+# Upstream: FolderPermission model
+class FolderPermission(models.Model):
+    ALL = 0
+    THIS = 1
+    CHILDREN = 2
+
+    ALLOW = 1
+    DENY = 0
+
+    TYPES = [
+        (ALL, _("all items")),
+        (THIS, _("this item only")),
+        (CHILDREN, _("this item and all children")),
+    ]
+
+    PERMISIONS = [
+        (None, _("inherit")),
+        (ALLOW, _("allow")),
+        (DENY, _("deny")),
+    ]
+
+    folder = models.ForeignKey(
+        Folder,
+        verbose_name=("folder"),
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
+
+    type = models.SmallIntegerField(
+        _("type"),
+        choices=TYPES,
+        default=ALL,
+    )
+
+    user = models.ForeignKey(
+        getattr(settings, 'AUTH_USER_MODEL', 'auth.User'),
+        related_name="filer_folder_permissions",
+        on_delete=models.SET_NULL,
+        verbose_name=_("user"),
+        blank=True,
+        null=True,
+    )
+
+    group = models.ForeignKey(
+        auth_models.Group,
+        related_name="filer_folder_permissions",
+        verbose_name=_("group"),
+        blank=True,
+        null=True,
+        on_delete=models.CASCADE,
+    )
+
+    everybody = models.BooleanField(
+        _("everybody"),
+        default=False,
+    )
+
+    can_read = models.SmallIntegerField(
+        _("can read"),
+        choices=PERMISIONS,
+        blank=True,
+        null=True,
+        default=None,
+    )
+
+    can_edit = models.SmallIntegerField(
+        _("can edit"),
+        choices=PERMISIONS,
+        blank=True,
+        null=True,
+        default=None,
+    )
+
+    can_add_children = models.SmallIntegerField(
+        _("can add children"),
+        choices=PERMISIONS,
+        blank=True,
+        null=True,
+        default=None,
+    )
+
+    class Meta:
+        verbose_name = _('folder permission')
+        verbose_name_plural = _('folder permissions')
+        app_label = 'filer'
+
+    objects = FolderPermissionManager()
+
+    def __str__(self):
+        return self.pretty_logical_path
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__}(pk={self.pk}): folder="{self.pretty_logical_path}">'
+
+    def clean(self):
+        if self.type == self.ALL and self.folder:
+            raise ValidationError(_('Folder cannot be selected with type "all items".'))
+        if self.type != self.ALL and not self.folder:
+            raise ValidationError(_('Folder has to be selected when type is not "all items".'))
+        if self.everybody and (self.user or self.group):
+            raise ValidationError(_('User or group cannot be selected together with "everybody".'))
+        if not self.user and not self.group and not self.everybody:
+            raise ValidationError(_('At least one of user, group, or "everybody" has to be selected.'))
+
+    @cached_property
+    def pretty_logical_path(self):
+        if self.folder:
+            return self.folder.pretty_logical_path
+        return gettext("All Folders")
+
+    pretty_logical_path.short_description = _("Logical Path")
+
+    @cached_property
+    def who(self):
+        parts = []
+        if self.user:
+            parts.append(_("User: {user}").format(user=self.user))
+        if self.group:
+            parts.append(_("Group: {group}").format(group=self.group))
+        if self.everybody:
+            parts.append(_("Everybody"))
+        if parts:
+            return format_html_join("; ", '{}', ((p,) for p in parts))
+        return '–'
+
+    who.short_description = _("Who")
+
+    @cached_property
+    def what(self):
+        mapping = {
+            'can_edit': _("Edit"),
+            'can_read': _("Read"),
+            'can_add_children': _("Add children"),
+        }
+        perms = []
+        for key, text in mapping.items():
+            perm = getattr(self, key)
+            if perm == self.ALLOW:
+                perms.append(text)
+            elif perm == self.DENY:
+                perms.append('\u0336'.join(text) + '\u0336')
+        return format_html_join(", ", '{}', ((p,) for p in perms))
+
+    what.short_description = _("What")

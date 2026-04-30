@@ -1,35 +1,35 @@
-#-*- coding: utf-8 -*-
-from django.template.loader import render_to_string
+import warnings
 
 from django import forms
-from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.contrib.admin.sites import site
-from django.urls import reverse
+from django.contrib.admin.widgets import ForeignKeyRawIdWidget
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
-from filer.models import Folder
-from filer.settings import FILER_STATICMEDIA_PREFIX
-from filer.utils.model_label import get_model_label
 
-try:
-    from django.utils.text import truncate_words
-except ImportError:
-    from django.template.defaultfilters import truncatewords as truncate_words
+from ..models import Folder
+from ..settings import ICON_CSS_LIB
+from ..utils.compatibility import truncate_words
+from ..utils.model_label import get_model_label
 
 
 class AdminFolderWidget(ForeignKeyRawIdWidget):
     choices = None
+    input_type = "hidden"
+    is_hidden = False
 
-
-    def render(self, name, value, attrs=None):
+    def render(self, name, value, attrs=None, renderer=None):
         obj = self.obj_for_value(value)
-        css_id = attrs.get('id')
+        css_id = attrs.get("id")
         css_id_folder = "%s_folder" % css_id
         css_id_description_txt = "%s_description_txt" % css_id
-        required = self.attrs
         if attrs is None:
             attrs = {}
         related_url = None
+
         if value:
             try:
                 folder = Folder.objects.get(pk=value)
@@ -37,52 +37,57 @@ class AdminFolderWidget(ForeignKeyRawIdWidget):
             except Exception:
                 pass
         if not related_url:
-            related_url = reverse('admin:filer-directory_listing-root')
+            related_url = reverse("admin:filer-directory_listing-last")
         params = self.url_parameters()
-        params['select_folder'] = 1
+        params["_pick"] = "folder"
         if params:
-            url = '?' + '&amp;'.join(
-                            ['%s=%s' % (k, v) for k, v in list(params.items())])
+            url = "?" + urlencode(sorted(params.items()))
         else:
-            url = ''
-        if not 'class' in attrs:
+            url = ""
+        if "class" not in attrs:
             # The JavaScript looks for this hook.
-            attrs['class'] = 'vForeignKeyRawIdAdminField'
+            attrs["class"] = "vForeignKeyRawIdAdminField"
         super_attrs = attrs.copy()
         hidden_input = super(ForeignKeyRawIdWidget, self).render(
-                                                    name, value, super_attrs)
+            name, value, super_attrs
+        )  # grandparent super
 
         # TODO: "id_" is hard-coded here. This should instead use the correct
         # API to determine the ID dynamically.
         context = {
-            'hidden_input': hidden_input,
-            'lookup_url': '%s%s' % (related_url, url),
-            'lookup_name': name,
-            'span_id': css_id_description_txt,
-            'object': obj,
-            'clear_id': '%s_clear' % css_id,
-            'descid': css_id_description_txt,
-            'noimg': '%sicons/nofile_32x32.png' % FILER_STATICMEDIA_PREFIX,
-            'foldid': css_id_folder,
-            'id': css_id,
-            }
-        html = render_to_string('admin/filer/widgets/admin_folder.html', context)
+            "hidden_input": hidden_input,
+            "lookup_url": f"{related_url}{url}",
+            "lookup_name": name,
+            "span_id": css_id_description_txt,
+            "object": obj,
+            "clear_id": "%s_clear" % css_id,
+            "descid": css_id_description_txt,
+            "foldid": css_id_folder,
+            "id": css_id,
+        }
+        html = render_to_string("admin/filer/widgets/admin_folder.html", context)
         return mark_safe(html)
 
     def label_for_value(self, value):
         obj = self.obj_for_value(value)
-        return '&nbsp;<strong>%s</strong>' % truncate_words(obj, 14)
+        return "&nbsp;<strong>%s</strong>" % truncate_words(obj, 14)
 
     def obj_for_value(self, value):
+        if not value:
+            return None
         try:
-            key = self.remote_field.get_related_field().name
-            obj = self.remote_field.model.objects.get(**{key: value})
-        except:
+            key = self.rel.get_related_field().name
+            obj = self.rel.model._default_manager.get(**{key: value})
+        except ObjectDoesNotExist:
             obj = None
         return obj
 
     class Media:
-        js = (FILER_STATICMEDIA_PREFIX + 'js/popup_handling.js',)
+        css = {"all": ("filer/css/admin_filer.css",) + ICON_CSS_LIB}
+        js = (
+            "filer/js/addons/popup_handling.js",
+            "filer/js/widgets/admin-folder-widget.js",
+        )
 
 
 class AdminFolderFormField(forms.ModelChoiceField):
@@ -91,11 +96,13 @@ class AdminFolderFormField(forms.ModelChoiceField):
     def __init__(self, rel, queryset, to_field_name, *args, **kwargs):
         self.rel = rel
         self.queryset = queryset
+        self.limit_choices_to = kwargs.pop("limit_choices_to", None)
         self.to_field_name = to_field_name
         self.max_value = None
         self.min_value = None
-        kwargs.pop('widget', None)
-        super(AdminFolderFormField, self).__init__(queryset, widget=self.widget(rel, site), *args, **kwargs)
+        kwargs.pop("widget", None)
+        kwargs.pop("blank", None)
+        forms.Field.__init__(self, widget=self.widget(rel, site), *args, **kwargs)
 
     def widget_attrs(self, widget):
         widget.required = self.required
@@ -107,24 +114,22 @@ class FilerFolderField(models.ForeignKey):
     default_model_class = Folder
 
     def __init__(self, **kwargs):
-        kwargs['to'] = get_model_label(self.default_model_class)
-        super(FilerFolderField, self).__init__(**kwargs)
+        # We hard-code the `to` argument for ForeignKey.__init__
+        dfl = get_model_label(self.default_model_class)
+        if "to" in kwargs.keys():  # pragma: no cover
+            old_to = get_model_label(kwargs.pop("to"))
+            if old_to.lower() != dfl.lower():
+                msg = "{} can only be a ForeignKey to {}; {} passed".format(
+                    self.__class__.__name__, dfl, old_to
+                )
+                warnings.warn(msg, SyntaxWarning)
+        kwargs["to"] = dfl
+        super().__init__(**kwargs)
 
     def formfield(self, **kwargs):
-        # This is a fairly standard way to set up some defaults
-        # while letting the caller override them.
         defaults = {
-            'form_class': self.default_form_class,
-            'rel': self.remote_field,
+            "form_class": self.default_form_class,
+            "rel": self.remote_field,
         }
         defaults.update(kwargs)
-        return super(FilerFolderField, self).formfield(**defaults)
-
-    def south_field_triple(self):
-        "Returns a suitable description of this field for South."
-        # We'll just introspect ourselves, since we inherit.
-        from south.modelsinspector import introspector
-        field_class = "django.db.models.fields.related.ForeignKey"
-        args, kwargs = introspector(self)
-        # That's our definition!
-        return (field_class, args, kwargs)
+        return super().formfield(**defaults)

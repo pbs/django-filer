@@ -1,10 +1,17 @@
 {% extends "admin/base_site.html" %}
-{% load i18n filermedia %}
+{% load i18n static filer_admin_tags %}
+
 {% block extrastyle %}
-    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" />
-    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}admin/libs/bootstrap/css/bootstrap.css" />
-    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}admin/libs/ace/css/ace.min.css" />
-    <link href="//fonts.googleapis.com/css?family=Open+Sans:400,300" type="text/css" media="all" rel="stylesheet" />
-	<link rel="stylesheet" type="text/css" href="{% filer_staticmedia_prefix %}css/admin_style.css" />
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'filer/css/admin_filer.css' %}">
+    {% icon_css_library %}
 {% endblock %}
 
+{% block extrahead %}
+    {{ block.super }}
+
+    {# upload stuff #}
+    {{ media.js }}
+    <script src="{% static 'admin/js/admin/RelatedObjectLookups.js' %}"></script>
+    <script src="{% static 'filer/js/dist/filer-base.bundle.js' %}"></script>
+{% endblock %}
