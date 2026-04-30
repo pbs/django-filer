@@ -176,12 +176,18 @@ def matching_file_subtypes(filename, file_pointer, request):
     from ..settings import FILER_FILE_MODELS
     from .loader import load_model
 
+    # If request/mime_type is None, try to guess from filename
+    mime_type = request
+    if mime_type is None and filename:
+        import mimetypes
+        mime_type = mimetypes.guess_type(filename)[0]
+
     types = []
     for model_path in FILER_FILE_MODELS:
         types.append(load_model(model_path))
 
     def _match_subtype(subtype):
-        return subtype.matches_file_type(filename, file_pointer, request)
+        return subtype.matches_file_type(filename, file_pointer, mime_type)
     type_matches = list(filter(_match_subtype, types))
     return type_matches
 

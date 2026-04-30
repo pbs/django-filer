@@ -431,6 +431,9 @@ class File(PolymorphicModel, mixins.IconsMixin):
             pass
         elif issubclass(self.__class__, File):
             self._file_type_plugin_name = self.__class__.__name__
+        # Ensure file metadata is computed on first save
+        if not self.sha1 and self.file:
+            self.file_data_changed()
         # cache the file size
         try:
             self._file_size = self.file.size
@@ -742,7 +745,8 @@ class File(PolymorphicModel, mixins.IconsMixin):
             r = self.file.url
         except:  # noqa
             r = ''
-        return r
+        from filer.utils.cdn import get_cdn_url
+        return get_cdn_url(self, r)
 
     @property
     def canonical_time(self):

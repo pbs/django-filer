@@ -42,6 +42,7 @@ from . import views
 from .forms import CopyFilesAndFoldersForm, RenameFilesForm, ResizeImagesForm
 from .patched.admin_utils import get_deleted_objects
 from .permissions import PrimitivePermissionAwareModelAdmin
+from .common_admin import FolderPermissionModelAdmin
 from .tools import (
     AdminContext, admin_url_params_encoded, check_files_edit_permissions, check_files_read_permissions,
     check_folder_edit_permissions, check_folder_read_permissions, get_directory_listing_type, popup_status,
@@ -60,16 +61,17 @@ class AddFolderPopupForm(forms.ModelForm):
         fields = ('name',)
 
 
-class FolderAdmin(PrimitivePermissionAwareModelAdmin):
+class FolderAdmin(FolderPermissionModelAdmin):
     list_display = ('name',)
-    exclude = ('parent',)
+    exclude = ('parent', 'owner', 'folder_type')
     list_per_page = 100
     list_filter = ('owner',)
     search_fields = ['name']
     autocomplete_fields = ['owner']
     save_as = True  # see ImageAdmin
     actions = ['delete_files_or_folders', 'move_files_and_folders',
-               'copy_files_and_folders', 'resize_images', 'rename_files']
+               'copy_files_and_folders', 'resize_images', 'rename_files',
+               'extract_files', 'move_to_clipboard']
 
     if DJANGO_VERSION >= (5, 2):
         directory_listing_template = 'admin/filer/folder/directory_listing.html'
@@ -79,38 +81,109 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
     order_by_file_fields = ['_file_size', 'original_filename', 'name', 'owner',
                             'uploaded_at', 'modified_at']
 
+    def get_readonly_fields(self, request, obj=None):
+        self.readonly_fields = [ro_field
+                                for ro_field in self.readonly_fields]
+        self._make_restricted_field_readonly(request.user, obj)
+        return super().get_readonly_fields(request, obj)
+
+    def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
+        from django.contrib.sites.models import Site
+        formfield = super().formfield_for_foreignkey(
+            db_field, request, **kwargs)
+        if request and db_field.remote_field.model is Site:
+            if request.user.is_superuser:
+                formfield.queryset = Site.objects.all()
+            else:
+                from filer.utils.cms_roles import get_admin_sites_for_user
+                admin_sites = [site.id
+                               for site in get_admin_sites_for_user(request.user)]
+                formfield.queryset = Site.objects.filter(id__in=admin_sites)
+        return formfield
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        from django.contrib.sites.models import Site
+        formfield = super().formfield_for_manytomany(
+            db_field, request, **kwargs)
+        if request and db_field.remote_field.model is Site:
+            if request.user.is_superuser:
+                formfield.queryset = Site.objects.all()
+            else:
+                from filer.utils.cms_roles import get_admin_sites_for_user
+                admin_sites = [site.id
+                               for site in get_admin_sites_for_user(request.user)]
+                formfield.queryset = Site.objects.filter(id__in=admin_sites)
+        return formfield
+
     def get_form(self, request, obj=None, **kwargs):
         """
         Returns a Form class for use in the admin add view. This is used by
         add_view and change_view.
+
+        Sets the parent folder and owner for the folder that will be edited
+        in the form.
         """
         parent_id = request.GET.get('parent_id', None)
         if not parent_id:
             parent_id = request.POST.get('parent_id', None)
         if parent_id:
             return AddFolderPopupForm
+
+        folder_form = super().get_form(
+            request, obj=obj, **kwargs)
+
+        if 'site' in folder_form.base_fields:
+            folder_form.base_fields['site'].widget.can_add_related = False
+            folder_form.base_fields['site'].widget.can_delete_related = False
+            folder_form.base_fields['site'].widget.can_change_related = False
+
+        if 'shared' in folder_form.base_fields:
+            folder_form.base_fields['shared'].widget.can_add_related = False
+
+        # only show shared sites field for superusers
+        if not request.user.is_superuser:
+            folder_form.base_fields.pop('shared', None)
+
+        # check if site field should be visible in the form
+        is_core_folder = False
+        if obj and obj.pk:
+            # change view
+            change_parent_id = obj.parent_id
+            is_core_folder = obj.is_core()
         else:
-            folder_form = super().get_form(
-                request, obj=None, **kwargs)
+            # add view
+            change_parent_id = parent_id
+            folder_form.base_fields.pop('restricted', None)
 
-            def folder_form_clean(form_obj):
-                cleaned_data = form_obj.cleaned_data
-                if 'name' not in cleaned_data:
-                    return cleaned_data
-                folders_with_same_name = self.get_queryset(request).filter(
-                    parent=form_obj.instance.parent,
-                    name=cleaned_data['name'])
-                if form_obj.instance.pk:
-                    folders_with_same_name = folders_with_same_name.exclude(
-                        pk=form_obj.instance.pk)
-                if folders_with_same_name.exists():
-                    raise ValidationError(
-                        'Folder with this name already exists.')
+        # hide site/shared for child folders or core folders
+        pop_site_fields = change_parent_id or is_core_folder
+        if pop_site_fields:
+            folder_form.base_fields.pop('site', None)
+            folder_form.base_fields.pop('shared', None)
+
+        def folder_form_clean(form_obj):
+            cleaned_data = form_obj.cleaned_data
+            if 'name' not in cleaned_data:
                 return cleaned_data
+            # make sure owner and parent are passed to the model clean method
+            current_folder = form_obj.instance
+            if not current_folder.owner:
+                current_folder.owner = request.user
+            if parent_id:
+                current_folder.parent = Folder.objects.get(id=parent_id)
+            folders_with_same_name = self.get_queryset(request).filter(
+                parent=form_obj.instance.parent,
+                name=cleaned_data['name'])
+            if form_obj.instance.pk:
+                folders_with_same_name = folders_with_same_name.exclude(
+                    pk=form_obj.instance.pk)
+            if folders_with_same_name.exists():
+                raise ValidationError(
+                    'Folder with this name already exists.')
+            return cleaned_data
 
-            # attach clean to the default form rather than defining a new form class
-            folder_form.clean = folder_form_clean
-            return folder_form
+        folder_form.clean = folder_form_clean
+        return folder_form
 
     def save_form(self, request, form, change):
         """
@@ -164,6 +237,23 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
         return super().render_change_form(
             request=request, context=context, add=add,
             change=change, form_url=form_url, obj=obj)
+
+    def add_view(self, request, *args, **kwargs):
+        raise PermissionDenied
+
+    def make_folder(self, request, folder_id=None, *args, **kwargs):
+        response = super(FolderAdmin, self).add_view(request, *args, **kwargs)
+
+        if (request.method == 'POST' and popup_status(request) and
+            not isinstance(response, HttpResponseRedirect)):
+            if hasattr(response, 'render'):
+                response = response.render()
+            content = getattr(response, 'content', b'')
+            if response.status_code == 200 and b'errorlist' not in content:
+                return HttpResponse('<script type="text/javascript">' +
+                                    'opener.dismissPopupAndReload(window);' +
+                                    '</script>')
+        return response
 
     def delete_view(self, request, object_id, extra_context=None):
         """
@@ -233,10 +323,10 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
                  name='filer-directory_listing'),
 
             path('<int:folder_id>/make_folder/',
-                 self.admin_site.admin_view(views.make_folder),
+                 self.admin_site.admin_view(self.make_folder),
                  name='filer-directory_listing-make_folder'),
             path('make_folder/',
-                 self.admin_site.admin_view(views.make_folder),
+                 self.admin_site.admin_view(self.make_folder),
                  name='filer-directory_listing-make_root_folder'),
 
             path('images_with_missing_data/',
@@ -805,9 +895,10 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
                 # Still need to delete files individually (not only the database entries)
                 for f in qs:
                     f.delete()
-                # delete all folders
+                # delete all folders individually to trigger soft-delete
                 self.log_deletions(request, folders_queryset)
-                folders_queryset.delete()
+                for folder in folders_queryset:
+                    folder.delete()
                 self.message_user(request, _("Successfully deleted %(count)d files and/or folders.") % {"count": n, })
             # Return None to display the change list page again.
             return None
@@ -971,12 +1062,24 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
         return JsonResponse(result, safe=False)
 
     def _move_files_and_folders_impl(self, files_queryset, folders_queryset, destination):
-        files_queryset.update(folder=destination)
-        folders_queryset.update(parent=destination)
+        for f in files_queryset:
+            f.folder = destination
+            f.save()
+        for f_id in folders_queryset.values_list('id', flat=True):
+            f = Folder.objects.get(id=f_id)
+            f.parent = destination
+            f.save()
 
     def move_files_and_folders(self, request, files_queryset, folders_queryset):
         opts = self.model._meta
         app_label = opts.app_label
+
+        # PBS: prevent moving root folders
+        if folders_queryset.filter(parent=None).exists():
+            messages.error(request, "To prevent potential problems, users "
+                "are not allowed to move root folders. You may copy folders "
+                "and files.")
+            return
 
         current_folder = self._get_current_action_folder(request, files_queryset, folders_queryset)
         perms_needed = self._check_move_perms(request, files_queryset, folders_queryset)
@@ -993,6 +1096,29 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
             folders_dict = dict(folders)
             if destination not in folders_dict or not folders_dict[destination][1]:
                 raise PermissionDenied
+
+            # PBS: site consistency checks
+            sites_from_folders = \
+                set(folders_queryset.values_list('site_id', flat=True)) | \
+                set(files_queryset.exclude(folder__isnull=True).\
+                        values_list('folder__site_id', flat=True))
+
+            if sites_from_folders and None in sites_from_folders:
+                messages.error(request, "Some of the selected files/folders "
+                    "do not belong to any site. Folders need to be assigned "
+                    "to a site before you can move files/folders from it.")
+                return
+            elif len(sites_from_folders) > 1:
+                messages.error(request, "You cannot move files/folders that "
+                    "belong to several sites. Select files/folders that "
+                    "belong to only one site.")
+                return
+            elif (sites_from_folders and destination.site and
+                    sites_from_folders.pop() != destination.site.id):
+                messages.error(request, "Selected files/folders need to "
+                    "belong to the same site as the destination folder.")
+                return
+
             # We count only topmost files and folders here
             n = files_queryset.count() + folders_queryset.count()
             conflicting_names = [folder.name for folder in self.get_queryset(request).filter(parent=destination, name__in=folders_queryset.values('name'))]
@@ -1110,6 +1236,57 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
         return TemplateResponse(request, "admin/filer/folder/choose_rename_format.html", context)
 
     rename_files.short_description = _("Rename files")
+
+    def extract_files(self, request, files_queryset, folders_queryset):
+        from django.contrib.contenttypes.models import ContentType
+        from ..models import Archive
+        success_format = "Successfully extracted archive {}."
+
+        files_queryset = files_queryset.filter(
+            polymorphic_ctype=ContentType.objects.get_for_model(Archive).id)
+        # cannot extract in unfiled files folder
+        if files_queryset.filter(folder__isnull=True).exists():
+            raise PermissionDenied
+
+        if not has_multi_file_action_permission(request, files_queryset,
+                Folder.objects.none()):
+            raise PermissionDenied
+
+        def is_valid_archive(filer_file):
+            is_valid = filer_file.is_valid()
+            if not is_valid:
+                error_format = "{} is not a valid zip file"
+                message = error_format.format(filer_file.clean_actual_name)
+                messages.error(request, _(message))
+            return is_valid
+
+        def has_collisions(filer_file):
+            collisions = filer_file.collisions()
+            if collisions:
+                error_format = "Files/Folders from {archive} with names:"
+                error_format += "{names} already exist."
+                names = ", ".join(collisions)
+                archive = filer_file.clean_actual_name
+                message = error_format.format(
+                    archive=archive,
+                    names=names,
+                )
+                messages.error(request, _(message))
+            return len(collisions) > 0
+
+        for f in files_queryset:
+            if not is_valid_archive(f) or has_collisions(f):
+                continue
+            f.extract()
+            message = success_format.format(f.actual_name)
+            self.message_user(request, _(message))
+            for err_msg in f.extract_errors:
+                messages.warning(
+                    request,
+                    _("%s: %s" % (f.actual_name, err_msg))
+                )
+
+    extract_files.short_description = _("Extract selected zip files")
 
     def _generate_new_filename(self, filename, suffix):
         basename, extension = os.path.splitext(filename)

@@ -37,10 +37,6 @@ class Migration(migrations.Migration):
             name='image',
             options={'default_manager_name': 'objects', 'verbose_name': 'image', 'verbose_name_plural': 'images'},
         ),
-        migrations.RemoveField(
-            model_name='image',
-            name='default_credit',
-        ),
         migrations.AddField(
             model_name='file',
             name='mime_type',

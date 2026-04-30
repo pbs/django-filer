@@ -21,6 +21,22 @@ class NewFolderForm(forms.ModelForm):
             'name': widgets.AdminTextInputWidget,
         }
 
+    def __init__(self, *args, **kwargs):
+        self.is_root_folder = kwargs.pop('is_root_folder', True)
+        super().__init__(*args, **kwargs)
+        if self.is_root_folder:
+            self.fields['site'].required = True
+        else:
+            # Hide site field for child folders
+            if 'site' in self.fields:
+                del self.fields['site']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.is_root_folder and not cleaned_data.get('site'):
+            raise forms.ValidationError('Site is required')
+        return cleaned_data
+
 
 @login_required
 def make_folder(request, folder_id=None):
@@ -36,7 +52,9 @@ def make_folder(request, folder_id=None):
     else:
         folder = None
 
-    if request.user.is_superuser:
+    if folder and not folder.has_add_permission(request.user):
+        raise PermissionDenied
+    elif request.user.is_superuser:
         pass
     elif folder is None:
         # regular users may not add root folders unless configured otherwise
@@ -47,20 +65,28 @@ def make_folder(request, folder_id=None):
         raise PermissionDenied
 
     if request.method == 'POST':
-        new_folder_form = NewFolderForm(request.POST)
+        new_folder_form = NewFolderForm(request.POST, is_root_folder=(folder is None))
         if new_folder_form.is_valid():
             new_folder = new_folder_form.save(commit=False)
             if (folder or FolderRoot()).contains_folder(new_folder.name):
                 new_folder_form._errors['name'] = new_folder_form.error_class(
                     [_('Folder with this name already exists.')])
             else:
-                context = admin.site.each_context(request)
                 new_folder.parent = folder
                 new_folder.owner = request.user
                 new_folder.save()
-                return TemplateResponse(request, 'admin/filer/dismiss_popup.html', context)
+                if popup_status(request):
+                    context = admin.site.each_context(request)
+                    return TemplateResponse(request, 'admin/filer/dismiss_popup.html', context)
+                else:
+                    from django.urls import reverse
+                    if folder:
+                        url = reverse('admin:filer-directory_listing', kwargs={'folder_id': folder.id})
+                    else:
+                        url = reverse('admin:filer-directory_listing-root')
+                    return HttpResponseRedirect(url)
     else:
-        new_folder_form = NewFolderForm()
+        new_folder_form = NewFolderForm(is_root_folder=(folder is None))
 
     context = admin.site.each_context(request)
     context.update({
@@ -74,15 +100,12 @@ def make_folder(request, folder_id=None):
 
 @login_required
 def paste_clipboard_to_folder(request):
-    if True:
-        # TODO: cleanly remove Clipboard code if it is no longer needed
-        return HttpResponseBadRequest('not implemented anymore')
 
     if request.method == 'POST':
         folder = Folder.objects.get(id=request.POST.get('folder_id'))
         clipboard = Clipboard.objects.get(id=request.POST.get('clipboard_id'))
         if folder.has_add_children_permission(request):
-            tools.move_files_from_clipboard_to_folder(clipboard, folder)
+            tools.move_files_from_clipboard_to_folder(request, clipboard, folder)
             tools.discard_clipboard(clipboard)
         else:
             raise PermissionDenied
@@ -99,10 +122,6 @@ def paste_clipboard_to_folder(request):
 
 @login_required
 def discard_clipboard(request):
-    if True:
-        # TODO: cleanly remove Clipboard code if it is no longer needed
-        return HttpResponseBadRequest('not implemented anymore')
-
     if request.method == 'POST':
         clipboard = Clipboard.objects.get(id=request.POST.get('clipboard_id'))
         tools.discard_clipboard(clipboard)
@@ -116,9 +135,6 @@ def discard_clipboard(request):
 
 @login_required
 def delete_clipboard(request):
-    if True:
-        # TODO: cleanly remove Clipboard code if it is no longer needed
-        return HttpResponseBadRequest('not implemented anymore')
 
     if request.method == 'POST':
         clipboard = Clipboard.objects.get(id=request.POST.get('clipboard_id'))

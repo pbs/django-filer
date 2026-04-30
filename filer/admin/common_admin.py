@@ -147,12 +147,20 @@ class CommonModelAdmin(admin.ModelAdmin):
 class FolderPermissionModelAdmin(CommonModelAdmin):
 
     def has_add_permission(self, request):
-        # allow only make folder view
+        # allow only make folder views
         current_view = resolve(request.path_info).url_name
-        if not current_view == 'filer-directory_listing-make_root_folder':
+        allowed_views = (
+            'filer-directory_listing-make_root_folder',
+            'filer-directory_listing-make_folder',
+        )
+        if current_view not in allowed_views:
             return False
 
         folder_id = get_param_from_request(request, 'parent_id')
+        # Also check URL kwargs for folder_id
+        if not folder_id:
+            resolved = resolve(request.path_info)
+            folder_id = resolved.kwargs.get('folder_id')
         if not folder_id:
             # only site admins and superusers can add root folders
             if has_admin_role(request.user):

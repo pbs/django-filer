@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .. import settings as filer_settings
 from ..models import Clipboard, ClipboardItem, Folder
 from ..settings import FILER_THUMBNAIL_ICON_SIZE
-from ..utils.files import handle_request_files_upload, handle_upload
+from ..utils.files import handle_request_files_upload, handle_upload, truncate_filename
 from ..utils.loader import load_model
 from ..validation import validate_upload
 from . import views
@@ -36,6 +36,9 @@ class ClipboardAdmin(admin.ModelAdmin):
     raw_id_fields = ('user',)
     verbose_name = "DEBUG Clipboard"
     verbose_name_plural = "DEBUG Clipboards"
+    messages = {
+        'already-exists': "File '{}' already exists in the clipboard.",
+    }
 
     def get_urls(self):
         return [
@@ -98,9 +101,19 @@ def ajax_upload(request, folder_id=None):
     else:
         # else process the request as usual
         upload, filename, is_raw, mime_type = handle_upload(request)
-    # TODO: Deprecated/refactor
-    # Get clipboad
-    # clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
+
+    # Truncate long filenames
+    filename = truncate_filename(upload, maxlen=100)
+    upload.name = filename
+
+    # Get clipboard
+    clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
+
+    # Check for duplicate files in clipboard
+    existing_in_clipboard = clipboard.files.filter(original_filename=filename)
+    if existing_in_clipboard.exists():
+        error_msg = ClipboardAdmin.messages['already-exists'].format(filename)
+        return JsonResponse({'error': error_msg})
 
     # find the file type
     for filer_class in filer_settings.FILER_FILE_MODELS:
@@ -127,10 +140,9 @@ def ajax_upload(request, folder_id=None):
             return JsonResponse({'error': str(error)})
         file_obj.folder = folder
         file_obj.save()
-        # TODO: Deprecated/refactor
-        # clipboard_item = ClipboardItem(
-        #     clipboard=clipboard, file=file_obj)
-        # clipboard_item.save()
+        clipboard_item = ClipboardItem(
+            clipboard=clipboard, file=file_obj)
+        clipboard_item.save()
 
         try:
             thumbnail = None

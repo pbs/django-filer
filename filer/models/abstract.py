@@ -61,6 +61,7 @@ class BaseImage(File):
     }
     file_type = 'Image'
     _icon = "image"
+    _filename_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp']
 
     _height = models.FloatField(
         null=True,
@@ -116,6 +117,8 @@ class BaseImage(File):
     def matches_file_type(cls, iname, ifile, mime_type):
         # source: https://www.freeformatter.com/mime-types-list.html
         from ..settings import IMAGE_MIME_TYPES
+        if not mime_type:
+            return False
         maintype, subtype = mime_type.split('/')
         return maintype == 'image' and subtype in IMAGE_MIME_TYPES
 
@@ -149,35 +152,35 @@ class BaseImage(File):
         # the image gets attached to a folder and saved. We also
         # send the error msg in the JSON and also post the message
         # so that they know what is wrong with the image they uploaded
-        if not self.file or not FILER_MAX_IMAGE_PIXELS:
-            return
+        # Only check pixel size for new uploads (no pk yet)
+        if self.file and FILER_MAX_IMAGE_PIXELS and not self.pk:
+            if self._width is None or self._height is None:
+                # If image size exceeds Pillow's max image size, Pillow will not return width or height
+                pixels = 2 * FILER_MAX_IMAGE_PIXELS + 1
+                aspect = 16 / 9
+            else:
+                width, height = max(1, self.width), max(1, self.height)
+                pixels: int = width * height
+                aspect: float = width / height
+            res_x: int = int((FILER_MAX_IMAGE_PIXELS * aspect) ** 0.5)
+            res_y: int = int(res_x / aspect)
+            if pixels > 2 * FILER_MAX_IMAGE_PIXELS:
+                msg = _(
+                    "Image format not recognized or image size exceeds limit of %(max_pixels)d million "
+                    "pixels by a factor of two or more. Before uploading again, check file format or resize "
+                    "image to %(width)d x %(height)d resolution or lower."
+                ) % dict(max_pixels=FILER_MAX_IMAGE_PIXELS // 1000000, width=res_x, height=res_y)
+                raise ValidationError(str(msg), code="image_size")
 
-        if self._width is None or self._height is None:
-            # If image size exceeds Pillow's max image size, Pillow will not return width or height
-            pixels = 2 * FILER_MAX_IMAGE_PIXELS + 1
-            aspect = 16 / 9
-        else:
-            width, height = max(1, self.width), max(1, self.height)
-            pixels: int = width * height
-            aspect: float = width / height
-        res_x: int = int((FILER_MAX_IMAGE_PIXELS * aspect) ** 0.5)
-        res_y: int = int(res_x / aspect)
-        if pixels > 2 * FILER_MAX_IMAGE_PIXELS:
-            msg = _(
-                "Image format not recognized or image size exceeds limit of %(max_pixels)d million "
-                "pixels by a factor of two or more. Before uploading again, check file format or resize "
-                "image to %(width)d x %(height)d resolution or lower."
-            ) % dict(max_pixels=FILER_MAX_IMAGE_PIXELS // 1000000, width=res_x, height=res_y)
-            raise ValidationError(str(msg), code="image_size")
-
-        if pixels > FILER_MAX_IMAGE_PIXELS:
-            msg = _(
-                "Image size (%(pixels)d million pixels) exceeds limit of %(max_pixels)d "
-                "million pixels. Before uploading again, resize image to %(width)d x %(height)d "
-                "resolution or lower."
-            ) % dict(pixels=pixels // 1000000, max_pixels=FILER_MAX_IMAGE_PIXELS // 1000000,
-                     width=res_x, height=res_y)
-            raise ValidationError(str(msg), code="image_size")
+            if pixels > FILER_MAX_IMAGE_PIXELS:
+                msg = _(
+                    "Image size (%(pixels)d million pixels) exceeds limit of %(max_pixels)d "
+                    "million pixels. Before uploading again, resize image to %(width)d x %(height)d "
+                    "resolution or lower."
+                ) % dict(pixels=pixels // 1000000, max_pixels=FILER_MAX_IMAGE_PIXELS // 1000000,
+                         width=res_x, height=res_y)
+                raise ValidationError(str(msg), code="image_size")
+        super().clean()
 
     def save(self, *args, **kwargs):
         self.has_all_mandatory_data = self._check_validity()
@@ -243,12 +246,13 @@ class BaseImage(File):
         return self._height or 0.0
 
     def _generate_thumbnails(self, required_thumbnails):
+        from filer.utils.cdn import get_cdn_url
         _thumbnails = {}
         for name, opts in required_thumbnails.items():
             try:
                 opts.update({'subject_location': self.subject_location})
                 thumb = self.file.get_thumbnail(opts)
-                _thumbnails[name] = thumb.url
+                _thumbnails[name] = get_cdn_url(self, thumb.url)
             except Exception as e:
                 # catch exception and manage it. We can re-raise it for debugging
                 # purposes and/or just logging it, provided user configured

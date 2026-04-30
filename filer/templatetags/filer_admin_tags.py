@@ -20,6 +20,7 @@ from filer.models.imagemodels import BaseImage
 from filer.settings import (
     DEFERRED_THUMBNAIL_SIZES, FILER_MAX_SVG_THUMBNAIL_SIZE, FILER_TABLE_ICON_SIZE, FILER_THUMBNAIL_ICON_SIZE,
 )
+import filer.models
 
 
 register = Library()
@@ -227,3 +228,37 @@ def icon_css_library():
     for lib in settings.ICON_CSS_LIB:
         html += f'<link rel="stylesheet" type="text/css" href="{static(lib)}">'
     return mark_safe(html)
+
+
+@register.simple_tag(takes_context=True)
+def get_popup_params(context, sep='?'):
+    is_popup = context.get('is_popup', False)
+    select_folder = context.get('select_folder', False)
+    current_site = context.get('current_site', False)
+    file_type = context.get('file_type', None)
+    params = ''
+    if is_popup:
+        params += '%s_popup=1' % sep
+        if select_folder:
+            params += '&select_folder=1'
+        if current_site:
+            params += '&current_site=%s' % current_site
+        if file_type:
+            params += '&file_type=%s' % file_type
+    return params
+
+
+@register.filter
+def pretty_display(filer_obj):
+    if isinstance(filer_obj, filer.models.Folder):
+        return '/%s' % '/'.join(filer_obj.get_ancestors(include_self=True)
+                                    .values_list('name', flat=True))
+    if isinstance(filer_obj, filer.models.File):
+        name = filer_obj.actual_name
+        if not filer_obj.folder_id:
+            return '/%s' % name
+        return '/%s' % '/'.join(
+            list(filer.models.Folder.all_objects.get(id=filer_obj.folder_id)
+                    .get_ancestors(include_self=True)
+                    .values_list('name', flat=True)) + [name])
+    return ''
