@@ -1,6 +1,6 @@
-#-*- coding: utf-8 -*-
 from django.http import HttpResponse
-from filer.server.backends.base import ServerBase
+
+from .base import ServerBase
 
 
 class NginxXAccelRedirectServer(ServerBase):
@@ -18,11 +18,10 @@ class NginxXAccelRedirectServer(ServerBase):
     def get_nginx_location(self, path):
         return path.replace(self.location, self.nginx_location)
 
-    def serve(self, request, file_obj, **kwargs):
-        # we should not use get_mimetype() here, because it tries to access the file in the filesystem.
-        #response = HttpResponse(content_type=self.get_mimetype(file.path))
+    def serve(self, request, filer_file, **kwargs):
         response = HttpResponse()
-        nginx_path = self.get_nginx_location(file_obj.path)
+        response['Content-Type'] = filer_file.mime_type
+        nginx_path = self.get_nginx_location(filer_file.path)
         response['X-Accel-Redirect'] = nginx_path
-        self.default_headers(request=request, response=response, file_obj=file_obj, **kwargs)
+        self.default_headers(request=request, response=response, file_obj=filer_file.file, **kwargs)
         return response

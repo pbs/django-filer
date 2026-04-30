@@ -1,31 +1,34 @@
-# -*- coding: utf-8 -*-
 """
 Copy of ``django.contrib.admin.utils.get_deleted_objects`` and a subclass of
-``django.contrib.admin.utils.NestedObjects`` that work with djongo_polymorphic querysets.
-Ultimatly these should go directly into django_polymorphic or, in a more generic way, into django itself.
+``django.contrib.admin.utils.NestedObjects`` that work with django-polymorphic
+querysets.
+Ultimately these should go directly into django-polymorphic or, in a more
+generic way, into Django itself.
 
-This code has been copied from
-django 1.4. ``get_deleted_objects`` and ``NestedObjects`` have not changed compared to 1.3.1.
+This code has been copied from Django 1.9.4.
 
-At all locations where something has been changed, there are inline comments in the code.
+At all locations where something has been changed, there are inline comments
+in the code.
 """
-from django.contrib.admin.utils import NestedObjects, quote
+from collections import defaultdict
+
+from django import VERSION as DJANGO_VERSION
+from django.contrib.admin.utils import quote
 from django.contrib.auth import get_permission_codename
-from django.utils.text import capfirst
-from django.utils.html import format_html
+from django.db import models
+from django.db.models.deletion import Collector
 from django.urls import NoReverseMatch, reverse
 from django.utils.encoding import force_str
-
+from django.utils.html import format_html
+from django.utils.text import capfirst
 
 
 def get_deleted_objects(objs, opts, user, admin_site, using):
     """
     Find all objects related to ``objs`` that should also be deleted. ``objs``
-    must be a homogenous iterable of objects (e.g. a QuerySet).
-
+    must be a homogeneous iterable of objects (e.g. a QuerySet).
     Returns a nested list of strings suitable for display in the
     template with the ``unordered_list`` filter.
-
     """
     # --- begin patch ---
     collector = PolymorphicAwareNestedObjects(using=using)
@@ -53,8 +56,7 @@ def get_deleted_objects(objs, opts, user, admin_site, using):
 
             p = '%s.%s' % (opts.app_label,
                            get_permission_codename('delete', opts))
-            # Additional change: also check for individual object permission
-            if not user.has_perm(p, obj) and not user.has_perm(p):
+            if not user.has_perm(p):
                 perms_needed.add(opts.verbose_name)
             # Display a link to the admin page.
             return format_html('{}: <a href="{}">{}</a>',
@@ -69,11 +71,45 @@ def get_deleted_objects(objs, opts, user, admin_site, using):
     to_delete = collector.nested(format_callback)
 
     protected = [format_callback(obj) for obj in collector.protected]
+    model_count = {model._meta.verbose_name_plural: len(objs) for model, objs in collector.model_objs.items()}
 
-    return to_delete, perms_needed, protected
+    return to_delete, model_count, perms_needed, protected
 
 
-class PolymorphicAwareNestedObjects(NestedObjects):
+class NestedObjects(Collector):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.edges = {}  # {from_instance: [to_instances]}
+        self.protected = set()
+        self.model_objs = defaultdict(set)
+
+    def add_edge(self, source, target):
+        self.edges.setdefault(source, []).append(target)
+
+    def collect(self, objs, source=None, source_attr=None, **kwargs):
+        for obj in objs:
+            if source_attr and not source_attr.endswith('+'):
+                related_name = source_attr % {
+                    'class': source._meta.model_name,
+                    'app_label': source._meta.app_label,
+                }
+                self.add_edge(getattr(obj, related_name), obj)
+            else:
+                self.add_edge(None, obj)
+            self.model_objs[obj._meta.model].add(obj)
+        try:
+            return super().collect(objs, source_attr=source_attr, **kwargs)
+        except models.ProtectedError as e:
+            self.protected.update(e.protected_objects)
+
+    if DJANGO_VERSION >= (3, 1):
+        def related_objects(self, related_model, related_fields, objs):
+            qs = super().related_objects(related_model, related_fields, objs)
+            return qs.select_related(*[related.name for related in related_fields])
+    else:
+        def related_objects(self, related, objs):
+            qs = super().related_objects(related, objs)
+            return qs.select_related(related.field.name)
 
     def _nested(self, obj, seen, format_callback):
         if obj in seen:
@@ -82,21 +118,37 @@ class PolymorphicAwareNestedObjects(NestedObjects):
         children = []
         for child in self.edges.get(obj, ()):
             children.extend(self._nested(child, seen, format_callback))
-        if hasattr(obj, 'is_in_trash') and obj.is_in_trash():
-            ret = []
+        if format_callback:
+            ret = [format_callback(obj)]
         else:
-            if format_callback:
-                ret = [format_callback(obj)]
-            else:
-                ret = [obj]
+            ret = [obj]
         if children:
             ret.append(children)
         return ret
 
+    def nested(self, format_callback=None):
+        """
+        Return the graph as a nested list.
+        """
+        seen = set()
+        roots = []
+        for root in self.edges.get(None, ()):
+            roots.extend(self._nested(root, seen, format_callback))
+        return roots
+
+    def can_fast_delete(self, *args, **kwargs):
+        """
+        We always want to load the objects into memory so that we can display
+        them to the user in confirm page.
+        """
+        return False
+
+
+class PolymorphicAwareNestedObjects(NestedObjects):
     def collect(self, objs, source_attr=None, **kwargs):
         if hasattr(objs, 'non_polymorphic'):
-            # .filter() is needed, because there may already be
-            #   cached polymorphic results in the queryset
+            # .filter() is needed, because there may already be cached
+            # polymorphic results in the queryset
             objs = objs.non_polymorphic().filter()
-        return super(PolymorphicAwareNestedObjects, self).collect(
+        return super().collect(
             objs, source_attr=source_attr, **kwargs)

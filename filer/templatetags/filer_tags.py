@@ -1,6 +1,7 @@
-#-*- coding: utf-8 -*-
-from django.template import Library
 import math
+
+from django.template import Library
+
 
 register = Library()
 
@@ -49,6 +50,7 @@ def filesize(bytes, format='auto1024'):
     elif format not in ('auto1024', 'auto1000',
                         'auto1024long', 'auto1000long'):
         return bytes
+
     # Check for valid bytes
     try:
         bytes = int(bytes)
@@ -82,12 +84,12 @@ def filesize(bytes, format='auto1024'):
             unit = filesize_long_formats.get(unit, '')
             if base == 1024 and unit:
                 unit = '%sbi' % unit[:2]
-            unit = '%sbyte%s' % (unit, bytes != '1' and 's' or '')
+            unit = '{}byte{}'.format(unit, bytes != '1' and 's' or '')
         else:
-            unit = '%s%s' % (base == 1024 and unit.upper() or unit,
+            unit = '{}{}'.format(base == 1024 and unit.upper() or unit,
                              base == 1024 and 'iB' or 'B')
 
-        return '%s %s' % (bytes, unit)
+        return f'{bytes} {unit}'
 
     if bytes == 0:
         return bytes
@@ -99,4 +101,6 @@ def filesize(bytes, format='auto1024'):
     elif format_len == 3:
         bytes = bytes >> (10 * (base - 1))
         return bytes / 1024.0
+
+
 register.filter(filesize)

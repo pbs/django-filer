@@ -1,20 +1,28 @@
-import datetime
 import os
-import filer
-
-from filer.utils.files import get_valid_filename
+import uuid
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.uploadedfile import UploadedFile
-from django.utils.encoding import smart_str
+from django.utils.encoding import force_str
+from django.utils.timezone import now
+
+import filer
+
+from .files import get_valid_filename
 
 
 def by_date(instance, filename):
-    datepart = str(datetime.datetime.now().strftime(smart_str("%Y/%m/%d")))
+    datepart = force_str(now().strftime("%Y/%m/%d"))
     return os.path.join(datepart, get_valid_filename(filename))
 
 
-class prefixed_factory(object):
+def randomized(instance, filename):
+    uuid_str = str(uuid.uuid4())
+    return os.path.join(uuid_str[0:2], uuid_str[2:4], uuid_str,
+                        get_valid_filename(filename))
+
+
+class prefixed_factory:
     def __init__(self, upload_to, prefix):
         self.upload_to = upload_to
         self.prefix = prefix
@@ -28,6 +36,8 @@ class prefixed_factory(object):
             return upload_to_str
         return os.path.join(self.prefix, upload_to_str)
 
+
+# PBS-specific: path-based filename generation
 
 def _is_in_memory(file_):
     return isinstance(file_, UploadedFile)
@@ -61,8 +71,6 @@ def by_path(instance, filename):
 
 def get_trash_path(instance):
     path = [filer.settings.FILER_TRASH_PREFIX]
-    # enforce uniqueness by using file's pk
     path.append("%s" % instance.pk)
-    # add folder path
     path.append(instance.pretty_logical_path.strip('/'))
     return os.path.join(*path)
