@@ -1,0 +1,108 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-filer"
+dynamic = ["version"]
+authors = [
+    {name = "Divio AG", email = "info@divio.ch"},
+]
+maintainers = [
+    {name = "Django CMS Association and contributors", email = "info@django-cms.org"},
+    {name = "PBS"},
+]
+description = "A file management application for django that makes handling of files and images a breeze."
+readme = "README.rst"
+license = {text = "BSD-3-Clause"}
+requires-python = ">=3.10"
+dependencies = [
+    "django>=5.1,<5.2",
+    "django-mptt>=0.6,<1.0",
+    "django-polymorphic>=4.0.0",
+    "django-js-asset>=2.0.0",
+    "easy-thumbnails[svg]>=2,<3.0",
+    "Unidecode>=0.04,<1.2",
+    "filetype",
+
+    # Pin svglib to a version below 1.6.0.
+    # The latest version (1.6.0) adds pycairo as a dependency,
+    # which requires system-level libraries and fails to install in the container.
+    # This can be removed once the issue is resolved.
+    # See: https://github.com/deeplook/svglib/issues/421
+    "svglib~=1.5.1",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Framework :: Django",
+    "Framework :: Django :: 5.1",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+s3 = [
+    "boto3",
+    "django-storages",
+]
+heif = ["pillow-heif"]
+
+[project.urls]
+Homepage = "https://github.com/pbs/django-filer"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["filer*", "LICENSE"]
+
+[tool.setuptools.package-data]
+"*" = [
+    "templates/**/*.html",
+    "static/**/*",
+    "locale/**/*",
+    "*.po",
+    "*.mo",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "filer.__version__"}
+
+[tool.flake8]
+max-line-length = 119
+exclude = [
+    "*.egg-info",
+    ".eggs",
+    ".env",
+    ".git",
+    ".settings",
+    ".tox",
+    ".venv",
+    "build",
+    "data",
+    "dist",
+    "docs",
+    "*migrations*",
+    "tmp",
+    "node_modules",
+]
+ignore = ["E251", "E128", "E501", "W503"]
+
+[tool.ruff]
+src = ["filer"]
+exclude = ["*/migrations/*"]
+line-length = 119
