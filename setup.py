@@ -1,13 +1,20 @@
 import os
+import re
 
 from setuptools import setup, find_packages
 
-try:
-    from setuptest import test
-except ImportError:
-    from setuptools.command.test import test
 
-version = __import__('filer').__version__
+def get_version():
+    """Read version from filer/__init__.py without importing the package."""
+    init_py = os.path.join(os.path.dirname(__file__), 'filer', '__init__.py')
+    with open(init_py) as f:
+        match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.M)
+    if not match:
+        raise RuntimeError("Cannot find __version__ in filer/__init__.py")
+    return match.group(1)
+
+
+version = get_version()
 
 
 def read(fname):
@@ -60,10 +67,4 @@ setup(
         'Programming Language :: Python :: 3.13',
         'Topic :: Internet :: WWW/HTTP',
     ],
-    cmdclass={'test': test},
-    test_suite='setuptest.setuptest.SetupTestSuite',
-    tests_require=(
-        'django-setuptest>=0.1.1',
-        'argparse',  # apparently needed by django-setuptest on python 2.6
-    ),
 )

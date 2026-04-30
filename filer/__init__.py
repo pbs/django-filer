@@ -11,4 +11,4 @@ Release logic:
  7. Create a new release on github.
 """
 
-__version__ = '3.5.0.pbs.1'
+__version__ = '3.5.0+pbs.1'
