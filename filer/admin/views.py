@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from .. import settings as filer_settings
 from ..models import Clipboard, Folder, FolderRoot, tools
-from .tools import AdminContext, admin_url_params_encoded, popup_status
+from ..admin.tools import AdminContext, admin_url_params_encoded, is_valid_destination, popup_status
 
 
 class NewFolderForm(forms.ModelForm):
@@ -66,6 +66,9 @@ def make_folder(request, folder_id=None):
 
     if request.method == 'POST':
         new_folder_form = NewFolderForm(request.POST, is_root_folder=(folder is None))
+        # Set parent on the instance before validation so model clean() works correctly
+        new_folder_form.instance.parent = folder
+        new_folder_form.instance.owner = request.user
         if new_folder_form.is_valid():
             new_folder = new_folder_form.save(commit=False)
             if (folder or FolderRoot()).contains_folder(new_folder.name):
@@ -102,13 +105,18 @@ def make_folder(request, folder_id=None):
 def paste_clipboard_to_folder(request):
 
     if request.method == 'POST':
-        folder = Folder.objects.get(id=request.POST.get('folder_id'))
-        clipboard = Clipboard.objects.get(id=request.POST.get('clipboard_id'))
-        if folder.has_add_children_permission(request):
-            tools.move_files_from_clipboard_to_folder(request, clipboard, folder)
-            tools.discard_clipboard(clipboard)
-        else:
+        folder_id = request.POST.get('folder_id')
+        if not folder_id:
             raise PermissionDenied
+        try:
+            folder = Folder.objects.get(id=folder_id)
+        except Folder.DoesNotExist:
+            raise PermissionDenied
+        if not is_valid_destination(request, folder):
+            raise PermissionDenied
+        clipboard = Clipboard.objects.get(id=request.POST.get('clipboard_id'))
+        files_moved = tools.move_files_from_clipboard_to_folder(request, clipboard, folder)
+        tools.discard_clipboard_files(clipboard, files_moved)
     redirect = request.GET.get('redirect_to', '')
     if not redirect:
         redirect = request.POST.get('redirect_to', '')

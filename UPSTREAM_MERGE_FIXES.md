@@ -14,6 +14,7 @@
 | After upstream merge | 73 | ~80 | 68 |
 | After Session 1 fixes | 67 | 86 | 68 |
 | After Session 2 fixes | 59 | 94 | 68 |
+| **After all fixes (final)** | **0** | **153** | **68** |
 
 ---
 

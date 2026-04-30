@@ -156,12 +156,16 @@ class FileAdmin(PrimitivePermissionAwareModelAdmin):
 
     def render_change_form(self, request, context, add=False, change=False,
                            form_url='', obj=None):
+        # PBS: flag readonly files to suppress submit buttons in template
+        is_readonly = obj and (obj.is_readonly_for_user(request.user) or
+                               obj.is_restricted_for_user(request.user))
         context.update({
             'show_delete': True,
             'history_url': admin_urlname(self.opts, 'history'),
             'expand_image_url': None,
             'is_popup': popup_status(request),
             'filer_admin_context': AdminContext(request),
+            'is_readonly_file': is_readonly,
         })
         if obj and obj.mime_maintype == 'image' and obj.file.exists():
             if 'svg' in obj.mime_type:

@@ -21,3 +21,10 @@
     {% endif %}
     {% include "admin/filer/tools/detail_info.html" %}
 {% endblock %}
+
+{% block submit_buttons_bottom %}
+    {% if not is_readonly_file %}
+        {% submit_row %}
+    {% endif %}
+{% endblock %}
+

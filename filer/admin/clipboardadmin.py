@@ -106,6 +106,12 @@ def ajax_upload(request, folder_id=None):
     filename = truncate_filename(upload, maxlen=100)
     upload.name = filename
 
+    # Re-detect mime_type after truncation may have added an extension
+    import mimetypes as _mimetypes
+    guessed_type = _mimetypes.guess_type(filename)[0]
+    if guessed_type and mime_type == 'application/octet-stream':
+        mime_type = guessed_type
+
     # Get clipboard
     clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
 

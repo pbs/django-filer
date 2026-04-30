@@ -495,6 +495,7 @@ class File(PolymorphicModel, mixins.IconsMixin):
         def copy_and_save():
             saved_as = self._copy_file(new_location)
             assert saved_as == new_location, '%s %s' % (saved_as, new_location)
+            self._file_data_changed_hint = False
             self.file = saved_as
             super(File, self).save(*args, **kwargs)
 
@@ -741,6 +742,8 @@ class File(PolymorphicModel, mixins.IconsMixin):
         """
         to make the model behave like a file field
         """
+        if self.is_in_trash():
+            return ''
         try:
             r = self.file.url
         except:  # noqa

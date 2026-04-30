@@ -45,7 +45,8 @@ from .permissions import PrimitivePermissionAwareModelAdmin
 from .common_admin import FolderPermissionModelAdmin
 from .tools import (
     AdminContext, admin_url_params_encoded, check_files_edit_permissions, check_files_read_permissions,
-    check_folder_edit_permissions, check_folder_read_permissions, get_directory_listing_type, popup_status,
+    check_folder_edit_permissions, check_folder_read_permissions, get_directory_listing_type,
+    has_multi_file_action_permission, popup_status,
     userperms_for_request,
 )
 
@@ -71,7 +72,8 @@ class FolderAdmin(FolderPermissionModelAdmin):
     save_as = True  # see ImageAdmin
     actions = ['delete_files_or_folders', 'move_files_and_folders',
                'copy_files_and_folders', 'resize_images', 'rename_files',
-               'extract_files', 'move_to_clipboard']
+               'extract_files', 'move_to_clipboard',
+               'enable_restriction', 'disable_restriction']
 
     if DJANGO_VERSION >= (5, 2):
         directory_listing_template = 'admin/filer/folder/directory_listing.html'
@@ -126,8 +128,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
         parent_id = request.GET.get('parent_id', None)
         if not parent_id:
             parent_id = request.POST.get('parent_id', None)
-        if parent_id:
-            return AddFolderPopupForm
 
         folder_form = super().get_form(
             request, obj=obj, **kwargs)
@@ -278,6 +278,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
         except self.model.DoesNotExist:
             parent_folder = None
 
+        # PBS: block deletion of core folders
+        if obj and not self.has_delete_permission(request, obj):
+            from django.http import HttpResponseForbidden
+            return HttpResponseForbidden("Permission denied")
+
         if request.POST:
             self.delete_files_or_folders(
                 request,
@@ -349,6 +354,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
         if not request.user.has_perm("filer.can_use_directory_listing"):
             raise PermissionDenied()
         clipboard = tools.get_user_clipboard(request.user)
+        file_type = request.GET.get('file_type', None)
         if viewtype == 'images_with_missing_data':
             folder = ImagesWithMissingData()
         elif viewtype == 'unfiled_images':
@@ -426,6 +432,10 @@ class FolderAdmin(FolderPermissionModelAdmin):
             file_qs = folder.files.all()
             show_result_count = False
 
+        # PBS: filter by file_type if requested
+        if file_type == 'image':
+            file_qs = file_qs.instance_of(Image)
+
         folder_qs = folder_qs.order_by('name').select_related("owner")
         order_by = request.GET.get('order_by', None)
         order_by_annotation = None
@@ -495,15 +505,14 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
         # Are we moving to clipboard?
         if request.method == 'POST' and '_save' not in request.POST:
-            # TODO: Refactor/remove clipboard parts
-            for f in folder_qs:
+            clipboard = tools.get_user_clipboard(request.user)
+            for f in file_qs:
                 if "move-to-clipboard-%d" % (f.id,) in request.POST:
-                    clipboard = tools.get_user_clipboard(request.user)
-                    if f.has_edit_permission(request):
-                        tools.move_file_to_clipboard(request, [f], clipboard)
-                        return HttpResponseRedirect(request.get_full_path())
-                    else:
+                    if (f.is_readonly_for_user(request.user) or
+                            f.is_restricted_for_user(request.user)):
                         raise PermissionDenied
+                    tools.move_file_to_clipboard(request, [f], clipboard)
+                    return HttpResponseRedirect(request.get_full_path())
 
         selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
         # Actions with no confirmation
@@ -738,24 +747,18 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
     def move_to_clipboard(self, request, files_queryset, folders_queryset):
         """
-        Action which moves the selected files and files in selected folders
-        to clipboard.
+        Action which moves the selected files to clipboard.
+        PBS: Only moves files, not folders. Checks has_multi_file_action_permission.
         """
-
-        if not self.has_change_permission(request):
-            raise PermissionDenied
-
         if request.method != 'POST':
             return None
 
+        if not has_multi_file_action_permission(
+                request, files_queryset,
+                Folder.objects.none()):
+            raise PermissionDenied
+
         clipboard = tools.get_user_clipboard(request.user)
-
-        check_files_edit_permissions(request, files_queryset)
-        check_folder_edit_permissions(request, folders_queryset)
-
-        # TODO: Display a confirmation page if moving more than X files to
-        # clipboard?
-
         # We define it like that so that we can modify it inside the
         # move_files function
         files_count = [0]
@@ -763,17 +766,14 @@ class FolderAdmin(FolderPermissionModelAdmin):
         def move_files(files):
             files_count[0] += tools.move_file_to_clipboard(request, files, clipboard)
 
-        def move_folders(folders):
-            for f in folders:
-                move_files(f.files)
-                move_folders(f.children.all())
-
         move_files(files_queryset)
-        move_folders(folders_queryset)
-
-        self.message_user(request, _("Successfully moved %(count)d files to "
-                                     "clipboard.") % {"count": files_count[0]})
-
+        if files_count[0] > 0:
+            self.message_user(request,
+                _("Successfully moved %(count)d files to clipboard.") % {
+                    "count": files_count[0], })
+        else:
+            self.message_user(request,
+                _("No files were moved to clipboard."))
         return None
 
     move_to_clipboard.short_description = _("Move selected files to clipboard")
@@ -834,6 +834,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
     files_set_public.short_description = _("Disable permissions for selected files")
 
+    def log_deletions(self, request, queryset):
+        """Log deletion for each object in the queryset."""
+        for obj in queryset:
+            self.log_deletion(request, obj, str(obj))
+
     def delete_files_or_folders(self, request, files_queryset, folders_queryset):
         """
         Action which deletes the selected files and/or folders.
@@ -851,6 +856,12 @@ class FolderAdmin(FolderPermissionModelAdmin):
         # Check that the user has delete permission for the actual model
         if not self.has_delete_permission(request):
             raise PermissionDenied
+
+        # PBS: block deletion of readonly/core/restricted folders/files
+        if not has_multi_file_action_permission(request, files_queryset, folders_queryset):
+            messages.error(request, _("You do not have permission to delete "
+                "the selected files and/or folders."))
+            return None
 
         current_folder = self._get_current_action_folder(
             request, files_queryset, folders_queryset)
@@ -1017,6 +1028,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
         """
         AJAX view returning JSON list of destination folders for the fancytree
         widget used in move/copy operations.
+        PBS: Filters by site access, excludes core folders and orphaned folders.
         """
         import json
         selected_folders_raw = request.GET.get('selected_folders', '[]')
@@ -1024,13 +1036,13 @@ class FolderAdmin(FolderPermissionModelAdmin):
             selected_ids = json.loads(selected_folders_raw)
         except (json.JSONDecodeError, TypeError):
             selected_ids = []
-        selected_qs = Folder.objects.filter(pk__in=selected_ids)
+        selected_qs = self.get_queryset(request).filter(pk__in=selected_ids)
 
         current_folder_id = request.GET.get('current_folder')
         current_folder = None
         if current_folder_id and current_folder_id != 'null':
             try:
-                current_folder = Folder.objects.get(pk=int(current_folder_id))
+                current_folder = self.get_queryset(request).get(pk=int(current_folder_id))
             except (Folder.DoesNotExist, ValueError):
                 pass
 
@@ -1038,17 +1050,22 @@ class FolderAdmin(FolderPermissionModelAdmin):
         if parent_raw and parent_raw != 'null':
             try:
                 parent_id = int(parent_raw)
-                folders = Folder.objects.filter(parent_id=parent_id).order_by('name')
+                folders = self.get_queryset(request).filter(parent_id=parent_id).order_by('name')
             except (ValueError, TypeError):
-                folders = Folder.objects.filter(parent__isnull=True).order_by('name')
+                folders = self.get_queryset(request).filter(parent__isnull=True).order_by('name')
         else:
-            folders = Folder.objects.filter(parent__isnull=True).order_by('name')
+            folders = self.get_queryset(request).filter(parent__isnull=True).order_by('name')
 
         result = []
         for fo in folders:
             if fo in selected_qs:
                 continue
             if not fo.has_read_permission(request):
+                continue
+            # PBS: exclude core folders and orphaned folders (no site) as destinations
+            if fo.is_core():
+                continue
+            if fo.parent is None and not fo.site:
                 continue
             is_selectable = (fo != current_folder) and fo.has_add_children_permission(request)
             has_children = fo.children.exists()
@@ -1097,6 +1114,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
             if destination not in folders_dict or not folders_dict[destination][1]:
                 raise PermissionDenied
 
+            # PBS: validate destination is not a core folder
+            if destination.is_core():
+                messages.error(request, "You cannot move files/folders into a core folder.")
+                return None
+
             # PBS: site consistency checks
             sites_from_folders = \
                 set(folders_queryset.values_list('site_id', flat=True)) | \
@@ -1107,6 +1129,10 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 messages.error(request, "Some of the selected files/folders "
                     "do not belong to any site. Folders need to be assigned "
                     "to a site before you can move files/folders from it.")
+                return
+            elif not destination.site:
+                messages.error(request, "The destination folder does not "
+                    "belong to any site.")
                 return
             elif len(sites_from_folders) > 1:
                 messages.error(request, "You cannot move files/folders that "
@@ -1288,6 +1314,59 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
     extract_files.short_description = _("Extract selected zip files")
 
+    def files_toggle_restriction(self, request, restriction,
+                                 files_qs, folders_qs):
+        """
+        Action which enables or disables restriction for files/folders.
+        """
+        if request.method != 'POST':
+            return None
+        # cannot restrict/unrestrict unfiled files
+        unfiled_files = files_qs.filter(folder__isnull=True)
+        if unfiled_files.exists():
+            messages.warning(request, _("Some of the selected files do not have parents: %s, "
+                                        "so their rights cannot be changed.") %
+                             ', '.join([str(unfiled_file) for unfiled_file in unfiled_files.all()]))
+            return None
+
+        if not has_multi_file_action_permission(request, files_qs, folders_qs):
+            messages.warning(request, _("You are not allowed to modify the restrictions on "
+                                        "the selected files and folders."))
+            return None
+
+        count = [0]
+
+        def set_files_or_folders(filer_obj):
+            for f in filer_obj:
+                if f.restricted != restriction:
+                    f.restricted = restriction
+                    f.save()
+                    count[0] += 1
+
+        set_files_or_folders(files_qs)
+        set_files_or_folders(folders_qs)
+        count = count[0]
+        if restriction:
+            self.message_user(request,
+                _("Successfully enabled restriction for %(count)d files "
+                  "and/or folders.") % {"count": count,})
+        else:
+            self.message_user(request,
+                _("Successfully disabled restriction for %(count)d files "
+                  "and/or folders.") % {"count": count,})
+
+    def enable_restriction(self, request, files_qs, folders_qs):
+        return self.files_toggle_restriction(
+            request, True, files_qs, folders_qs)
+
+    enable_restriction.short_description = _("Enable restriction for selected files and/or folders")
+
+    def disable_restriction(self, request, files_qs, folders_qs):
+        return self.files_toggle_restriction(
+            request, False, files_qs, folders_qs)
+
+    disable_restriction.short_description = _("Disable restriction for selected files and/or folders")
+
     def _generate_new_filename(self, filename, suffix):
         basename, extension = os.path.splitext(filename)
         return basename + suffix + extension
@@ -1378,6 +1457,24 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 folders_dict = dict(folders)
                 if destination not in folders_dict or not folders_dict[destination][1]:
                     raise PermissionDenied
+
+                # PBS: validate destination is not a core folder
+                if destination.is_core():
+                    messages.warning(request, _("The selected destination was not valid. "
+                        "You cannot copy files/folders into a core folder."))
+                    return None
+
+                # PBS: site consistency checks (same as move)
+                sites_from_folders = \
+                    set(folders_queryset.values_list('site_id', flat=True)) | \
+                    set(files_queryset.exclude(folder__isnull=True).\
+                            values_list('folder__site_id', flat=True))
+                if sites_from_folders and destination.site and \
+                        any(s != destination.site_id for s in sites_from_folders if s is not None):
+                    messages.warning(request, _("The selected destination was not valid. "
+                        "Selected files/folders need to belong to the same site as the destination folder."))
+                    return None
+
                 if files_queryset.count() + folders_queryset.count():
                     # We count all files and folders here (recursively)
                     n = self._copy_files_and_folders_impl(files_queryset, folders_queryset, destination, form.cleaned_data['suffix'], False)

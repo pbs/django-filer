@@ -115,6 +115,12 @@ class MultiStorageFieldFile(ThumbnailerNameMixin,
         else:
             return self.thumbnail_options['private'].get('base_dir', '')
 
+    def get_thumbnail(self, thumbnail_options, save=True, generate=None):
+        # PBS: prevent thumbnail generation for soft-deleted (trashed) files
+        if hasattr(self.instance, 'is_in_trash') and self.instance.is_in_trash():
+            return None
+        return super().get_thumbnail(thumbnail_options, save=save, generate=generate)
+
     def save(self, name, content, save=True):
         content.seek(0)  # Ensure we upload the whole file
         super().save(name, content, save)
