@@ -1,0 +1,518 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting django
+  Downloading django-6.0.4-py3-none-any.whl.metadata (3.9 kB)
+Collecting django-mptt
+  Downloading django_mptt-0.18.0-py3-none-any.whl.metadata (5.3 kB)
+Collecting django-polymorphic
+  Downloading django_polymorphic-4.11.2-py3-none-any.whl.metadata (7.7 kB)
+Collecting django-js-asset
+  Downloading django_js_asset-3.1.2-py3-none-any.whl.metadata (6.4 kB)
+Collecting easy-thumbnails
+  Downloading easy_thumbnails-2.10.1-py3-none-any.whl.metadata (15 kB)
+Collecting Unidecode
+  Downloading Unidecode-1.4.0-py3-none-any.whl.metadata (13 kB)
+Collecting filetype
+  Downloading filetype-1.2.0-py2.py3-none-any.whl.metadata (6.5 kB)
+Collecting svglib
+  Downloading svglib-1.6.0-py3-none-any.whl.metadata (11 kB)
+Collecting Pillow
+  Downloading pillow-12.2.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (8.8 kB)
+Collecting asgiref>=3.9.1 (from django)
+  Downloading asgiref-3.11.1-py3-none-any.whl.metadata (9.3 kB)
+Collecting sqlparse>=0.5.0 (from django)
+  Downloading sqlparse-0.5.5-py3-none-any.whl.metadata (4.7 kB)
+Collecting typing-extensions>=4.12.0 (from django-polymorphic)
+  Downloading typing_extensions-4.15.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting cssselect2>=0.2.0 (from svglib)
+  Downloading cssselect2-0.9.0-py3-none-any.whl.metadata (2.9 kB)
+Collecting lxml>=6.0.0 (from svglib)
+  Downloading lxml-6.1.0-cp312-cp312-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (4.0 kB)
+Collecting reportlab>=4.4.3 (from svglib)
+  Downloading reportlab-4.5.0-py3-none-any.whl.metadata (1.7 kB)
+Collecting rlpycairo>=0.4.0 (from svglib)
+  Downloading rlpycairo-0.4.0-py3-none-any.whl.metadata (4.9 kB)
+Collecting tinycss2>=0.6.0 (from svglib)
+  Downloading tinycss2-1.5.1-py3-none-any.whl.metadata (3.0 kB)
+Collecting webencodings (from cssselect2>=0.2.0->svglib)
+  Downloading webencodings-0.5.1-py2.py3-none-any.whl.metadata (2.1 kB)
+Collecting charset-normalizer (from reportlab>=4.4.3->svglib)
+  Downloading charset_normalizer-3.4.7-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 40.9/40.9 kB 14.8 MB/s eta 0:00:00
+Collecting pycairo>=1.20.0 (from rlpycairo>=0.4.0->svglib)
+  Downloading pycairo-1.29.0.tar.gz (665 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 665.9/665.9 kB 23.9 MB/s eta 0:00:00
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'error'
+  error: subprocess-exited-with-error
+  
+  × Preparing metadata (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [454 lines of output]
+      + meson setup /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667 /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b -Dbuildtype=release -Db_ndebug=if-release -Db_vscrt=md -Dwheel=true -Dtests=false --native-file=/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-python-native-file.ini
+      The Meson build system
+      Version: 1.11.1
+      Source dir: /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667
+      Build dir: /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b
+      Build type: native build
+      Project name: pycairo
+      Project version: 1.29.0
+      C compiler for the host machine: cc (gcc 13.3.0 "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0")
+      C linker for the host machine: cc ld.bfd 2.42
+      Host machine cpu family: x86_64
+      Host machine cpu: x86_64
+      Program python3 found: YES (/usr/bin/python3)
+      Compiler for C supports arguments -Wall: YES
+      Compiler for C supports arguments -Warray-bounds: YES
+      Compiler for C supports arguments -Wcast-align: YES
+      Compiler for C supports arguments -Wconversion: YES
+      Compiler for C supports arguments -Wextra: YES
+      Compiler for C supports arguments -Wformat=2: YES
+      Compiler for C supports arguments -Wformat-nonliteral: YES
+      Compiler for C supports arguments -Wformat-security: YES
+      Compiler for C supports arguments -Wimplicit-function-declaration: YES
+      Compiler for C supports arguments -Winit-self: YES
+      Compiler for C supports arguments -Wmissing-format-attribute: YES
+      Compiler for C supports arguments -Wmissing-noreturn: YES
+      Compiler for C supports arguments -Wnested-externs: YES
+      Compiler for C supports arguments -Wold-style-definition: YES
+      Compiler for C supports arguments -Wpacked: YES
+      Compiler for C supports arguments -Wpointer-arith: YES
+      Compiler for C supports arguments -Wreturn-type: YES
+      Compiler for C supports arguments -Wshadow: YES
+      Compiler for C supports arguments -Wsign-compare: YES
+      Compiler for C supports arguments -Wstrict-aliasing: YES
+      Compiler for C supports arguments -Wundef: YES
+      Compiler for C supports arguments -Wunused-but-set-variable: YES
+      Compiler for C supports arguments -Wswitch-default: YES
+      Compiler for C supports arguments -Wno-missing-field-initializers: YES
+      Compiler for C supports arguments -Wno-unused-parameter: YES
+      Compiler for C supports arguments -fno-strict-aliasing: YES
+      Compiler for C supports arguments -fvisibility=hidden: YES
+      Found pkg-config: YES (/usr/bin/pkg-config) 1.8.1
+      Found CMake: /usr/local/bin/cmake (3.31.6)
+      Run-time dependency cairo found: NO  (tried pkg-config and cmake)
+      
+      ../cairo/meson.build:31:12: ERROR: Dependency "cairo" not found (tried pkg-config and cmake)
+      
+      A full log can be found at /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-logs/meson-log.txt
+      ::group::==== CI platform detected, click here for meson-log.txt contents. ====
+      Build started at 2026-04-30T09:49:25.394376
+      Main binary: /usr/bin/python3
+      Build Options: -Dbuildtype=release -Db_ndebug=if-release -Db_vscrt=md -Dwheel=true -Dtests=false --native-file=/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-python-native-file.ini
+      Python system: Linux
+      The Meson build system
+      Version: 1.11.1
+      Source dir: /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667
+      Build dir: /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b
+      Build type: native build
+      Project name: pycairo
+      Project version: 1.29.0
+      -----------
+      Detecting compiler via: `cc --version` -> 0
+      stdout:
+      cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+      Copyright (C) 2023 Free Software Foundation, Inc.
+      This is free software; see the source for copying conditions.  There is NO
+      warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+      -----------
+      Running command: -cpp -x c -E -dM -
+      -----
+      -----------
+      Detecting linker via: `cc -Wl,--version` -> 0
+      stdout:
+      GNU ld (GNU Binutils for Ubuntu) 2.42
+      Copyright (C) 2024 Free Software Foundation, Inc.
+      This program is free software; you may redistribute it under the terms of
+      the GNU General Public License version 3 or (at your option) a later version.
+      This program has absolutely no warranty.
+      -----------
+      stderr:
+      collect2 version 13.3.0
+      /usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/13/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/13/lto-wrapper -plugin-opt=-fresolution=/tmp/ccxnZMDU.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/13 -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/13/../../.. --version -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/crtn.o
+      -----------
+      Sanity check compiler command line: cc -D_FILE_OFFSET_BITS=64 -o sanity_check_for_c.exe sanity_check_for_c.c -D_FILE_OFFSET_BITS=64
+      Sanity check compile stdout:
+      
+      -----
+      Sanity check compile stderr:
+      
+      -----
+      Sanity check built target output for host machine c compiler
+       -- Running test binary command:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/sanity_check_for_c.exe
+      -----------
+      Sanity check: `/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/sanity_check_for_c.exe` -> 0
+       -- stdout:
+      
+       -- stderr:
+      
+       -- returncode: 0
+      C compiler for the host machine: cc (gcc 13.3.0 "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0")
+      C linker for the host machine: cc ld.bfd 2.42
+      -----------
+      Detecting archiver via: `gcc-ar --version` -> 0
+      stdout:
+      GNU ar (GNU Binutils for Ubuntu) 2.42
+      Copyright (C) 2024 Free Software Foundation, Inc.
+      This program is free software; you may redistribute it under the terms of
+      the GNU General Public License version 3 or (at your option) any later version.
+      This program has absolutely no warranty.
+      -----------
+      -----------
+      Detecting compiler via: `cc --version` -> 0
+      stdout:
+      cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+      Copyright (C) 2023 Free Software Foundation, Inc.
+      This is free software; see the source for copying conditions.  There is NO
+      warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+      -----------
+      Running command: -cpp -x c -E -dM -
+      -----
+      -----------
+      Detecting linker via: `cc -Wl,--version` -> 0
+      stdout:
+      GNU ld (GNU Binutils for Ubuntu) 2.42
+      Copyright (C) 2024 Free Software Foundation, Inc.
+      This program is free software; you may redistribute it under the terms of
+      the GNU General Public License version 3 or (at your option) a later version.
+      This program has absolutely no warranty.
+      -----------
+      stderr:
+      collect2 version 13.3.0
+      /usr/bin/ld -plugin /usr/libexec/gcc/x86_64-linux-gnu/13/liblto_plugin.so -plugin-opt=/usr/libexec/gcc/x86_64-linux-gnu/13/lto-wrapper -plugin-opt=-fresolution=/tmp/ccxwrsCc.res -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc -plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_x86_64 --hash-style=gnu --as-needed -dynamic-linker /lib64/ld-linux-x86-64.so.2 -pie -z now -z relro /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/Scrt1.o /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/13/crtbeginS.o -L/usr/lib/gcc/x86_64-linux-gnu/13 -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu -L/usr/lib/gcc/x86_64-linux-gnu/13/../../../../lib -L/lib/x86_64-linux-gnu -L/lib/../lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/../lib -L/usr/lib/gcc/x86_64-linux-gnu/13/../../.. --version -lgcc --push-state --as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state /usr/lib/gcc/x86_64-linux-gnu/13/crtendS.o /usr/lib/gcc/x86_64-linux-gnu/13/../../../x86_64-linux-gnu/crtn.o
+      -----------
+      Sanity check compiler command line: cc -D_FILE_OFFSET_BITS=64 -o sanity_check_for_c.exe sanity_check_for_c.c -D_FILE_OFFSET_BITS=64
+      Sanity check compile stdout:
+      
+      -----
+      Sanity check compile stderr:
+      
+      -----
+      Sanity check built target output for build machine c compiler
+       -- Running test binary command:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/sanity_check_for_c.exe
+      -----------
+      Sanity check: `/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/sanity_check_for_c.exe` -> 0
+       -- stdout:
+      
+       -- stderr:
+      
+       -- returncode: 0
+      C compiler for the build machine: cc (gcc 13.3.0 "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0")
+      C linker for the build machine: cc ld.bfd 2.42
+      Build machine cpu family: x86_64
+      Build machine cpu: x86_64
+      Host machine cpu family: x86_64
+      Host machine cpu: x86_64
+      Target machine cpu family: x86_64
+      Target machine cpu: x86_64
+      Program python3 found: YES (/usr/bin/python3)
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpq10ufb7l
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpq10ufb7l/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpq10ufb7l/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wall` -> 0
+      Compiler for C supports arguments -Wall: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp8qts2n5l
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp8qts2n5l/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp8qts2n5l/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Warray-bounds` -> 0
+      Compiler for C supports arguments -Warray-bounds: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpg8nrnjvb
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpg8nrnjvb/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpg8nrnjvb/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wcast-align` -> 0
+      Compiler for C supports arguments -Wcast-align: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpahi5_xug
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpahi5_xug/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpahi5_xug/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wconversion` -> 0
+      Compiler for C supports arguments -Wconversion: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpvetn92u9
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpvetn92u9/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpvetn92u9/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wextra` -> 0
+      Compiler for C supports arguments -Wextra: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp591nhuze
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp591nhuze/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp591nhuze/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wformat=2` -> 0
+      Compiler for C supports arguments -Wformat=2: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpr5lad1fi
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpr5lad1fi/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpr5lad1fi/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wformat-nonliteral` -> 0
+      Compiler for C supports arguments -Wformat-nonliteral: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpduqdxvjc
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpduqdxvjc/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpduqdxvjc/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wformat-security` -> 0
+      Compiler for C supports arguments -Wformat-security: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpr2cg9qgk
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpr2cg9qgk/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpr2cg9qgk/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wimplicit-function-declaration` -> 0
+      Compiler for C supports arguments -Wimplicit-function-declaration: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpv65xtow9
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpv65xtow9/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpv65xtow9/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Winit-self` -> 0
+      Compiler for C supports arguments -Winit-self: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp82mly3km
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp82mly3km/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp82mly3km/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wmissing-format-attribute` -> 0
+      Compiler for C supports arguments -Wmissing-format-attribute: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpfaswcrni
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpfaswcrni/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpfaswcrni/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wmissing-noreturn` -> 0
+      Compiler for C supports arguments -Wmissing-noreturn: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmps5n97jul
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmps5n97jul/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmps5n97jul/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wnested-externs` -> 0
+      Compiler for C supports arguments -Wnested-externs: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpkcvs47pl
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpkcvs47pl/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpkcvs47pl/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wold-style-definition` -> 0
+      Compiler for C supports arguments -Wold-style-definition: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp089e1gxr
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp089e1gxr/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp089e1gxr/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wpacked` -> 0
+      Compiler for C supports arguments -Wpacked: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp5vsuim0z
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp5vsuim0z/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp5vsuim0z/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wpointer-arith` -> 0
+      Compiler for C supports arguments -Wpointer-arith: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmppw3tn4mm
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmppw3tn4mm/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmppw3tn4mm/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wreturn-type` -> 0
+      Compiler for C supports arguments -Wreturn-type: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpdyednray
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpdyednray/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpdyednray/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wshadow` -> 0
+      Compiler for C supports arguments -Wshadow: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmppzs14kt9
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmppzs14kt9/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmppzs14kt9/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wsign-compare` -> 0
+      Compiler for C supports arguments -Wsign-compare: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpim1xzoce
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpim1xzoce/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpim1xzoce/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wstrict-aliasing` -> 0
+      Compiler for C supports arguments -Wstrict-aliasing: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp2rcs89un
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp2rcs89un/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp2rcs89un/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wundef` -> 0
+      Compiler for C supports arguments -Wundef: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpye9rfxe9
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpye9rfxe9/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpye9rfxe9/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wunused-but-set-variable` -> 0
+      Compiler for C supports arguments -Wunused-but-set-variable: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpgt0j7j7o
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpgt0j7j7o/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpgt0j7j7o/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wswitch-default` -> 0
+      Compiler for C supports arguments -Wswitch-default: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpuy8j9o8g
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpuy8j9o8g/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpuy8j9o8g/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wmissing-field-initializers -Wno-missing-field-initializers` -> 0
+      Compiler for C supports arguments -Wno-missing-field-initializers: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp206a43mw
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp206a43mw/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp206a43mw/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -Wunused-parameter -Wno-unused-parameter` -> 0
+      Compiler for C supports arguments -Wno-unused-parameter: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp98e0ru46
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp98e0ru46/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmp98e0ru46/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -fno-strict-aliasing` -> 0
+      Compiler for C supports arguments -fno-strict-aliasing: YES
+      Running compile:
+      Working directory:  /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpz771h1xa
+      Code:
+      extern int i;
+      int i;
+      
+      -----------
+      Command line: `cc /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpz771h1xa/testfile.c -o /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/tmpz771h1xa/output.obj -c -D_FILE_OFFSET_BITS=64 -O0 -U_FORTIFY_SOURCE -fvisibility=hidden` -> 0
+      Compiler for C supports arguments -fvisibility=hidden: YES
+      Pkg-config binary missing from cross or native file, or env var undefined.
+      Trying a default Pkg-config fallback at pkg-config
+      Found pkg-config: YES (/usr/bin/pkg-config) 1.8.1
+      Determining dependency 'cairo' with pkg-config executable '/usr/bin/pkg-config'
+      env[PKG_CONFIG_PATH]:
+      env[PKG_CONFIG]: /usr/bin/pkg-config
+      -----------
+      Called: `/usr/bin/pkg-config --modversion cairo` -> 1
+      stderr:
+      Package cairo was not found in the pkg-config search path.
+      Perhaps you should add the directory containing `cairo.pc'
+      to the PKG_CONFIG_PATH environment variable
+      Package 'cairo', required by 'virtual:world', not found
+      -----------
+      CMake binary for host machine is not cached
+      CMake binary missing from cross or native file, or env var undefined.
+      Trying a default CMake fallback at cmake
+      Found CMake: /usr/local/bin/cmake (3.31.6)
+      Extracting basic cmake information
+      CMake Toolchain: Calling CMake once to generate the compiler state
+      Calling CMake (['/usr/local/bin/cmake']) in /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/__CMake_compiler_info__ with:
+        - "--trace-expand"
+        - "--trace-format=json-v1"
+        - "--no-warn-unused-cli"
+        - "--trace-redirect=cmake_trace.txt"
+        - "-G"
+        - "Ninja"
+        - "-DCMAKE_TOOLCHAIN_FILE=/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/__CMake_compiler_info__/CMakeMesonTempToolchainFile.cmake"
+        - "."
+      CMake trace warning: add_executable() non imported executables are not supported
+      CMake TRACE: /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/__CMake_compiler_info__/CMakeFiles/CMakeScratch/TryCompile-5br5r6/CMakeLists.txt:22 add_executable(['cmTC_68a78'])
+      CMake trace warning: target_link_libraries() TARGET cmTC_68a78 not found
+      CMake TRACE: /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/__CMake_compiler_info__/CMakeFiles/CMakeScratch/TryCompile-5br5r6/CMakeLists.txt:28 target_link_libraries(['cmTC_68a78', ''])
+      !meson_ci!/ci_include "/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/cmake_cairo/CMakeMesonToolchainFile.cmake"
+      Try CMake generator: auto
+      !meson_ci!/ci_include "/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/cmake_cairo/CMakeLists.txt"
+      Calling CMake (['/usr/local/bin/cmake']) in /tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/cmake_cairo with:
+        - "--trace-expand"
+        - "--trace-format=json-v1"
+        - "--no-warn-unused-cli"
+        - "--trace-redirect=cmake_trace.txt"
+        - "-DCMAKE_TOOLCHAIN_FILE=/tmp/pip-install-zbza_hym/pycairo_ded28bf9d04b454bae7dcc031f1c1667/.mesonpy-cdely51b/meson-private/cmake_cairo/CMakeMesonToolchainFile.cmake"
+        - "."
+        -- Module search paths:    ['/', '/opt', '/usr', '/usr/local']
+        -- CMake root:             /usr/local/share/cmake-3.31
+        -- CMake architectures:    ['x86_64-linux-gnu']
+        -- CMake lib search paths: ['lib', 'lib32', 'lib64', 'libx32', 'share', '', 'lib/x86_64-linux-gnu']
+      Preliminary CMake check failed. Aborting.
+      Run-time dependency cairo found: NO  (tried pkg-config and cmake)
+      
+      ../cairo/meson.build:31:12: ERROR: Dependency "cairo" not found (tried pkg-config and cmake)
+      
+      ::endgroup::
+      
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: metadata-generation-failed
+
+× Encountered error while generating package metadata.
+╰─> See above for output.
+
+note: This is an issue with the package mentioned above, not pip.
+hint: See above for details.

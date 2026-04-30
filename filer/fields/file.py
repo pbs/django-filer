@@ -135,3 +135,11 @@ class FilerFileField(models.ForeignKey):
         }
         defaults.update(kwargs)
         return super().formfield(**defaults)
+
+
+# PBS-specific: widget that doesn't show clear checkbox
+from django.contrib.admin import widgets as django_widgets
+
+
+class NonClearableFileInput(django_widgets.AdminFileWidget):
+    template_with_clear = ''

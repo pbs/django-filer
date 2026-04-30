@@ -171,3 +171,45 @@ def folders_available(current_site, user, folders_qs):
         visible = core_folders | shared_folders | accessible_site_folders
 
     return folders_qs.filter(visible).distinct()
+
+
+def has_multi_file_action_permission(request, files, folders):
+    """PBS: Check permissions for multi-file actions (move/copy/delete)."""
+    from ..utils.cms_roles import (
+        has_admin_role,
+        get_admin_sites_for_user,
+        get_sites_for_user,
+    )
+    # unfiled files can be moved/deleted so better to just exclude them
+    files = files.exclude(folder__isnull=True)
+    user = request.user
+
+    if files.readonly(user).exists() or folders.readonly(user).exists():
+        return False
+    if user.is_superuser:
+        return True
+
+    if files.restricted(user).exists():
+        return False
+
+    if folders.restricted_descendants(user).exists():
+        return False
+
+    # only superusers can move/delete files/folders with no site ownership
+    if (files.filter(folder__site__isnull=True).exists() or
+            folders.filter(site__isnull=True).exists()):
+        return False
+
+    _exists_root_folders = folders.filter(parent__isnull=True).exists()
+    if _exists_root_folders:
+        if not has_admin_role(user):
+            return False
+        sites_allowed = [s.id for s in get_admin_sites_for_user(user)]
+    else:
+        sites_allowed = get_sites_for_user(user)
+
+    if (files.exclude(folder__site__in=sites_allowed).exists() or
+            folders.exclude(site__in=sites_allowed).exists()):
+        return False
+
+    return True
