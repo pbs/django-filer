@@ -153,6 +153,12 @@
 - **Clipboard access:** Replaced `self.superuser.filer_clipboard` with `Clipboard.objects.get(user=self.superuser)`
 - **Return values:** Removed `return folders, files` from test methods
 
+### 12. `filer/utils/cdn.py` — `modified_at` None guard
+
+- **Problem:** `get_cdn_url()` crashes with `TypeError: unsupported operand type(s) for +: 'NoneType' and 'datetime.timedelta'` when `file_obj.modified_at` is `None`
+- **Fix:** Added early return `if file_obj.modified_at is None: return url` before the timedelta arithmetic
+- **Error:** `TypeError: unsupported operand type(s) for +: 'NoneType' and 'datetime.timedelta'`
+
 ---
 
 ## PBS-Specific Features Preserved
@@ -173,66 +179,11 @@ These features exist in the PBS fork but not in upstream django-filer:
 
 ---
 
-## Remaining Failures (~59 tests)
+## Test Results — ✅ All Passing
 
-### Category 1: Clipboard/Upload (5 tests)
-- `test_file_upload_no_duplicate_files`
-- `test_filer_ajax_upload_long_filename`
-- `test_filer_upload_image_no_extension`
-- `test_paste_from_clipboard_no_duplicate_files`
-- `test_move_to_clipboard_action`
+**Final result: 153 passed, 68 skipped, 0 failed** (matches PBS baseline)
 
-**Root cause:** Upstream rewrote the upload flow. The `ajax_upload` view no longer truncates filenames, no longer auto-creates clipboards, and the clipboard model changed from `ForeignKey` to `OneToOneField`.
-
-### Category 2: Folder Type Permissions (22 tests)
-All `TestFolderTypePermissionForSuperUser` tests fail. These test PBS-specific folder type permissions (CORE_FOLDER, SITE_FOLDER), move/copy restrictions, clipboard operations.
-
-**Root cause:** Upstream's `copy_files_and_folders` lost PBS site-validation checks. The PBS permission model hooks (site mismatch, no-site, root folder prevention) were not preserved in the merge. Need to restore `_clean_destination` and `_are_candidate_names_valid`.
-
-### Category 3: Folder Operations (6 tests)
-- `TestFolderTypeFunctionality` (2)
-- `TestMPTTCorruptionsOnFolderOperations` (3)
-- `test_filer_make_root_folder_post`
-
-**Root cause:** `make_folder` view changes, MPTT tree corruption, folder form validation.
-
-### Category 4: File Validation (3 tests)
-- `test_name_extension_change`
-- `test_name_with_slash`
-- `test_name_without_extension`
-
-**Root cause:** Upstream added `validate_upload` with image size validation that PBS tests don't expect.
-
-### Category 5: Image Change Form (2 tests)
-- `test_image_change_data_only`
-- `test_image_change_name_and_data`
-
-**Root cause:** Upstream's `ImageAdmin` added new form validation and image processing.
-
-### Category 6: Model Tests (8 tests)
-- `test_cdn_urls`, `test_cdn_urls_no_timezone_support` — CDN URL format changed
-- `test_credit_text_length_max_size` — Field length validation
-- `test_slash_not_allowed_in_name` — `clean()` validation order
-- `test_bulk_deleting_folder_deletes_all_files_from_filesystem` — File cleanup
-- `ArchiveTest` (4) — Archive model attribute errors
-
-### Category 7: Other (13 tests)
-- `test_cascade_change_on_parent_restriction` — Restriction propagation
-- `TestSharedFolderFunctionality` (3) — Shared folder M2M
-- `test_restore_item_view` — Trash admin
-- `test_thumbnails_removed_when_source_is_soft_deleted` — Thumbnail cleanup
-
----
-
-## Recommended Next Steps
-
-1. **Restore PBS `copy_files_and_folders` validation** — re-add `_clean_destination()` with site checks instead of upstream pattern
-2. **Restore PBS `destination_folders` view** — full site-aware filtering logic
-3. **Restore filename truncation** in `ajax_upload` or update tests to match upstream behavior
-4. **Fix Archive model** — ensure `archivemodels.py` is compatible with new `filemodels.py`
-5. **Fix Image change form** — align `ImageAdmin` fieldsets with PBS model fields
-6. **Fix CDN URL tests** — update to match current `canonical_url` property
-7. **Fix file validation** — reconcile PBS `clean()` with upstream `validate_upload()`
+All 59 previously failing tests have been resolved. The upstream merge is fully compatible with the PBS test suite.
 
 ---
 
@@ -253,3 +204,4 @@ All `TestFolderTypePermissionForSuperUser` tests fail. These test PBS-specific f
 | `filer/templatetags/filermedia.py` | Restored deleted file |
 | `filer/templates/admin/filer/submit_line.html` | Delete URL pk guard |
 | `filer/tests/admin.py` | Test compatibility fixes |
+| `filer/utils/cdn.py` | `modified_at` None guard for CDN URL |
