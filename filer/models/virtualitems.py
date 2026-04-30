@@ -1,10 +1,11 @@
-#-*- coding: utf-8 -*-
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from filer.models import mixins
-from filer.models.filemodels import File
-from filer.models.foldermodels import Folder
-from filer.utils.cms_roles import *
+
+from .. import settings as filer_settings
+from ..utils.cms_roles import has_admin_role
+from . import mixins
+from .filemodels import File
+from .foldermodels import Folder
 
 
 class DummyFolder(mixins.IconsMixin):
@@ -43,9 +44,15 @@ class DummyFolder(mixins.IconsMixin):
 
 
 class UnfiledImages(DummyFolder):
+    """PBS name for unsorted/unfiled images."""
     name = _("unfiled files")
     is_root = True
+    is_unsorted_uploads = True
     _icon = "unfiled_folder"
+
+    def __init__(self, user=None):
+        super().__init__()
+        self.user = user
 
     def _files(self):
         return File.objects.filter(
@@ -54,6 +61,10 @@ class UnfiledImages(DummyFolder):
 
     def get_admin_directory_listing_url_path(self):
         return reverse('admin:filer-directory_listing-unfiled_images')
+
+
+# Upstream compat alias
+UnsortedImages = UnfiledImages
 
 
 class ImagesWithMissingData(DummyFolder):
@@ -93,12 +104,12 @@ class FolderRoot(DummyFolder):
             return False
 
     def entries_with_names(self, names):
-        # children of te root folder can only be folders, so we don't have to look for files
         return self.children.filter(name__in=names)
 
     def get_admin_directory_listing_url_path(self):
         return reverse('admin:filer-directory_listing-root')
 
+    # PBS-specific permission methods
     def is_restricted_for_user(self, user):
         return not has_admin_role(user)
 
