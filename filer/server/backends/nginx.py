@@ -1,3 +1,5 @@
+import mimetypes
+
 from django.http import HttpResponse
 
 from .base import ServerBase
@@ -20,8 +22,11 @@ class NginxXAccelRedirectServer(ServerBase):
 
     def serve(self, request, filer_file, **kwargs):
         response = HttpResponse()
-        response['Content-Type'] = filer_file.mime_type
+        mime_type = getattr(filer_file, 'mime_type', None)
+        if mime_type is None:
+            mime_type = mimetypes.guess_type(filer_file.path)[0] or 'application/octet-stream'
+        response['Content-Type'] = mime_type
         nginx_path = self.get_nginx_location(filer_file.path)
         response['X-Accel-Redirect'] = nginx_path
-        self.default_headers(request=request, response=response, file_obj=filer_file.file, **kwargs)
+        self.default_headers(request=request, response=response, file_obj=filer_file, **kwargs)
         return response

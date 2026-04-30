@@ -16,7 +16,7 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db import models, router
 from django.db.models import Case, F, OuterRef, Subquery, When
 from django.db.models.functions import Coalesce, Lower
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
@@ -95,6 +95,8 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
 
             def folder_form_clean(form_obj):
                 cleaned_data = form_obj.cleaned_data
+                if 'name' not in cleaned_data:
+                    return cleaned_data
                 folders_with_same_name = self.get_queryset(request).filter(
                     parent=form_obj.instance.parent,
                     name=cleaned_data['name'])
@@ -246,6 +248,10 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
                  self.admin_site.admin_view(self.directory_listing),
                  {'viewtype': 'unfiled_images'},
                  name='filer-directory_listing-unfiled_images'),
+
+            path('destination_folders/',
+                 self.admin_site.admin_view(self.destination_folders),
+                 name='filer-destination_folders'),
         ] + super().get_urls()
 
     # custom views
@@ -404,7 +410,7 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
                 if "move-to-clipboard-%d" % (f.id,) in request.POST:
                     clipboard = tools.get_user_clipboard(request.user)
                     if f.has_edit_permission(request):
-                        tools.move_file_to_clipboard([f], clipboard)
+                        tools.move_file_to_clipboard(request, [f], clipboard)
                         return HttpResponseRedirect(request.get_full_path())
                     else:
                         raise PermissionDenied
@@ -665,7 +671,7 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
         files_count = [0]
 
         def move_files(files):
-            files_count[0] += tools.move_file_to_clipboard(files, clipboard)
+            files_count[0] += tools.move_file_to_clipboard(request, files, clipboard)
 
         def move_folders(folders):
             for f in folders:
@@ -782,15 +788,10 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
             n = files_queryset.count() + folders_queryset.count()
             if n:
                 # delete all explicitly selected files
-                if DJANGO_VERSION >= (5, 1):
-                    self.log_deletions(request, files_queryset)
-                    # Still need to delete files individually (not only the database entries)
-                    for f in files_queryset:
-                        f.delete()
-                else:
-                    for f in files_queryset:
-                        self.log_deletion(request, f, force_str(f))
-                        f.delete()
+                self.log_deletions(request, files_queryset)
+                # Still need to delete files individually (not only the database entries)
+                for f in files_queryset:
+                    f.delete()
                 # delete all files in all selected folders and their children
                 # This would happen automatically by ways of the delete
                 # cascade, but then the individual .delete() methods won't be
@@ -799,24 +800,14 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
                 for folder in folders_queryset:
                     folder_ids.add(folder.id)
                     folder_ids.update(folder.get_descendants_ids())
-                if DJANGO_VERSION >= (5, 1):
-                    qs = File.objects.filter(folder__in=folder_ids)
-                    self.log_deletions(request, qs)
-                    # Still need to delete files individually (not only the database entries)
-                    for f in qs:
-                        f.delete()
-                else:
-                    for f in File.objects.filter(folder__in=folder_ids):
-                        self.log_deletion(request, f, force_str(f))
-                        f.delete()
+                qs = File.objects.filter(folder__in=folder_ids)
+                self.log_deletions(request, qs)
+                # Still need to delete files individually (not only the database entries)
+                for f in qs:
+                    f.delete()
                 # delete all folders
-                if DJANGO_VERSION >= (5, 1):
-                    self.log_deletions(request, files_queryset)
-                    folders_queryset.delete()
-                else:
-                    for f in folders_queryset:
-                        self.log_deletion(request, f, force_str(f))
-                        f.delete()
+                self.log_deletions(request, folders_queryset)
+                folders_queryset.delete()
                 self.message_user(request, _("Successfully deleted %(count)d files and/or folders.") % {"count": n, })
             # Return None to display the change list page again.
             return None
@@ -930,6 +921,54 @@ class FolderAdmin(PrimitivePermissionAwareModelAdmin):
     def _list_all_destination_folders(self, request, folders_queryset, current_folder, allow_self):
         root_folders = self.get_queryset(request).filter(parent__isnull=True).order_by('name')
         return list(self._list_all_destination_folders_recursive(request, folders_queryset, current_folder, root_folders, allow_self, 0))
+
+    def destination_folders(self, request):
+        """
+        AJAX view returning JSON list of destination folders for the fancytree
+        widget used in move/copy operations.
+        """
+        import json
+        selected_folders_raw = request.GET.get('selected_folders', '[]')
+        try:
+            selected_ids = json.loads(selected_folders_raw)
+        except (json.JSONDecodeError, TypeError):
+            selected_ids = []
+        selected_qs = Folder.objects.filter(pk__in=selected_ids)
+
+        current_folder_id = request.GET.get('current_folder')
+        current_folder = None
+        if current_folder_id and current_folder_id != 'null':
+            try:
+                current_folder = Folder.objects.get(pk=int(current_folder_id))
+            except (Folder.DoesNotExist, ValueError):
+                pass
+
+        parent_raw = request.GET.get('parent')
+        if parent_raw and parent_raw != 'null':
+            try:
+                parent_id = int(parent_raw)
+                folders = Folder.objects.filter(parent_id=parent_id).order_by('name')
+            except (ValueError, TypeError):
+                folders = Folder.objects.filter(parent__isnull=True).order_by('name')
+        else:
+            folders = Folder.objects.filter(parent__isnull=True).order_by('name')
+
+        result = []
+        for fo in folders:
+            if fo in selected_qs:
+                continue
+            if not fo.has_read_permission(request):
+                continue
+            is_selectable = (fo != current_folder) and fo.has_add_children_permission(request)
+            has_children = fo.children.exists()
+            result.append({
+                'key': fo.pk,
+                'title': fo.name,
+                'folder': True,
+                'lazy': has_children,
+                'unselectable': not is_selectable,
+            })
+        return JsonResponse(result, safe=False)
 
     def _move_files_and_folders_impl(self, files_queryset, folders_queryset, destination):
         files_queryset.update(folder=destination)

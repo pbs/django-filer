@@ -278,7 +278,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
 
         def paste(uploaded_image):
             # current user should have one clipboard created
-            clipboard = self.superuser.filer_clipboard
+            clipboard = Clipboard.objects.get(user=self.superuser)
             response = self.client.post(
                 reverse('admin:filer-paste_clipboard_to_folder'),
                 {'folder_id': first_folder.pk,
@@ -291,7 +291,7 @@ class FilerClipboardAdminUrlsTests(TestCase):
         second_upload = upload()
         # second paste failed due to name conflict
         second_pasted_image = paste(second_upload)
-        clipboard = self.superuser.filer_clipboard
+        clipboard = Clipboard.objects.get(user=self.superuser)
         # file should remain in clipboard and should not be located in
         #   destination folder
         self.assertEqual(clipboard.files.count(), 1)
@@ -863,7 +863,6 @@ class BaseTestFolderTypePermissionLayer(object):
             self.client, folders['bar'], f1, [folders['baz1']])
         assert Folder.objects.filter(parent=f1).count() == 0
         f1.delete(to_trash=False)
-        return folders, files
 
     def _get_clipboard_files(self):
         clipboard, _ = Clipboard.objects.get_or_create(
@@ -1099,7 +1098,6 @@ class BaseTestFolderTypePermissionLayer(object):
         messages = [str(m) for m in response.context['messages']]
         assert any("The selected destination was not valid" in m for m in messages),\
             "Warning message not found in wrong copy response"
-        return folders, files
 
     def test_file_from_core_folder_is_unchangeable(self):
         f1 = Folder.objects.create(name='foo', folder_type=Folder.CORE_FOLDER)

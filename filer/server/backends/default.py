@@ -1,3 +1,4 @@
+import mimetypes
 import os
 import stat
 
@@ -23,11 +24,14 @@ class DefaultServer(ServerBase):
             raise Http404('"%s" does not exist' % fullpath)
         # Respect the If-Modified-Since header.
         statobj = os.stat(fullpath)
-        response_params = {'content_type': filer_file.mime_type}
+        mime_type = getattr(filer_file, 'mime_type', None)
+        if mime_type is None:
+            mime_type = mimetypes.guess_type(fullpath)[0] or 'application/octet-stream'
+        response_params = {'content_type': mime_type}
         if not was_modified_since(request.META.get('HTTP_IF_MODIFIED_SINCE'),
                                   statobj[stat.ST_MTIME]):
             return HttpResponseNotModified(**response_params)
         response = HttpResponse(open(fullpath, 'rb').read(), **response_params)
         response["Last-Modified"] = http_date(statobj[stat.ST_MTIME])
-        self.default_headers(request=request, response=response, file_obj=filer_file.file, **kwargs)
+        self.default_headers(request=request, response=response, file_obj=filer_file, **kwargs)
         return response

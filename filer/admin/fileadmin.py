@@ -81,7 +81,7 @@ class FileAdmin(PrimitivePermissionAwareModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         if obj and (obj.is_readonly_for_user(request.user) or
                     obj.is_restricted_for_user(request.user)):
-            return [field.name for field in obj.__class__._meta.fields]
+            return [field.name for field in obj.__class__._meta.fields] + ['display_canonical']
         readonly = list(self.readonly_fields)
         self._make_restricted_field_readonly(request.user, obj)
         if not request.user.is_superuser:
