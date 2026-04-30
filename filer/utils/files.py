@@ -174,9 +174,11 @@ def matching_file_subtypes(filename, file_pointer, request):
     Returns a list of valid subtypes for a given file.
     """
     from ..settings import FILER_FILE_MODELS
-    from .loader import load_object
+    from .loader import load_model
 
-    types = list(map(load_object, FILER_FILE_MODELS))
+    types = []
+    for model_path in FILER_FILE_MODELS:
+        types.append(load_model(model_path))
 
     def _match_subtype(subtype):
         return subtype.matches_file_type(filename, file_pointer, request)

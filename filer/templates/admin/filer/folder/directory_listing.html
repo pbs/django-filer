@@ -1,142 +1,265 @@
 {% extends "admin/filer/base_site.html" %}
-{% load filer_admin_tags filermedia i18n %}
+{% load i18n static filer_admin_tags %}
 
-{% block extrahead %}
-    {{ block.super }}
-    {# upload stuff #}
-    {{ media.js }}
-    <script type="text/javascript" src="{% admin_js_base %}vendor/jquery/jquery.min.js"></script>
-    <script type="text/javascript" src="{% filer_staticmedia_prefix %}js/jquery-ui-1.11.0.min.js"></script>
-    <script type="text/javascript" src="{% filer_staticmedia_prefix %}js/jquery.cookie.js"></script>
-    <script type="text/javascript" src="{% filer_staticmedia_prefix %}js/fileuploader.js"></script>
-    <script type="text/javascript" src="{% filer_staticmedia_prefix %}js/retina.js"></script>
-    <script type="text/javascript" src="{% admin_js_base %}admin/RelatedObjectLookups.js"></script>
-    <script type="text/javascript" src="{% filer_staticmedia_prefix %}js/popup_handling.js"></script>
-
-    {% if action_form %}
-        {% if actions_on_top or actions_on_bottom %}
-            <script type="text/javascript">
-                (function($) {
-                    $(document).ready(function($) {
-                        $("tr input.action-select").actions();
-                    });
-                })(django.jQuery);
-            </script>
-        {% endif %}
-    {% endif %}
-{% endblock %}
-
-{% block coltype %}colMS row{% endblock %}
-{% block bodyclass %}change-list filebrowser{% endblock %}
+{% block coltype %}{% endblock %}
+{% block bodyclass %}{{ block.super }} change-list filebrowser{% endblock %}
 
 
 {% block extrastyle %}
     {{ block.super }}
-    {{ media.css }}
 
+    {{ media.css }}
     {% if action_form %}
         {% url 'admin:jsi18n' as jsi18nurl %}
         <script type="text/javascript" src="{{ jsi18nurl|default:'../../jsi18n/' }}"></script>
     {% endif %}
-
     {% if query.pop %}
         <style type="text/css">
-            #header { display: none; }
-        </style>
-    {% endif %}
-    {% if not actions_on_top and not actions_on_bottom %}
-        <style>
-            #changelist table thead th:first-child {width: inherit}
+            #header {
+                display: none;
+            }
         </style>
     {% endif %}
 {% endblock %}
 
 {% block breadcrumbs %}
-    {% with folder as instance %}
-        {% include "admin/filer/breadcrumbs.html" %}
-    {% endwith %}
-{% endblock %}
-
-
-{% block sidebar %}
-    <div id="content-related" class="col-lg-2 col-md-3 col-xs-12 no-padding-right">
-        {% include "admin/filer/tools/clipboard/clipboard.html" %}
-    </div>
-{% endblock %}
-
-
-{% block content_title %}{% endblock %}
-{% block content %}
-<div id="content-main" class="col-lg-10 col-md-9 col-xs-12 no-padding-left">
-    <ul class="object-tools list-unstyled list-inline text-right">
-        {% if not folder|is_restricted_for_user:user and folder.can_have_subfolders %}
-            {%if is_popup and folder.is_root %}
-            {%else%}
-                <li>
-                    <a id="id_new_folder" href="{% url 'admin:filer-directory_listing-make_root_folder' %}?_popup=1&parent_id={{ folder.id }}" class="addlink btn btn-success btn-sm" onclick="return showAddAnotherPopup(this);" title="{% trans "Adds a new Folder" %}"><i class="ace-icon fa fa-folder-open"></i>{% trans "New Folder" %}</a>
-                </li>
-            {% endif %}
-        {% endif %}
-        <li>
-            <a id="id_upload_button" href="#" class="addlink btn btn-purple btn-sm" title="{% trans 'upload files' %}"><i class="ace-icon fa fa-cloud-upload"></i>{% trans 'Upload' %}</a>
-        </li>
-        {% include 'admin/filer/tools/upload_button_js.html' %}
-    </ul>
-
-    <div class="module" id="changelist">
-        {% include "admin/filer/tools/search_form.html" %}
-
-        {% if not folder.is_root %}
-            <div class="page-header">
-                {% if folder.parent %}
-                    <a href="{% url 'admin:filer-directory_listing' folder.parent.id %}{% get_popup_params %}" title="{% trans "Go back to the parent folder" %}" class="middle go-up"><i class="ace-icon fa fa-long-arrow-up bigger-125 pink"></i></a>
-                {% else %}
-                    <a href="{% url 'admin:filer-directory_listing-root' %}{% get_popup_params %}" title="{% trans "Go back to" %} {% trans "root"|title %} {% trans "folder" %}" class="middle go-up"><i class="ace-icon fa fa-long-arrow-up bigger-125 pink"></i></a>
-                {% endif %}
-
-                <img src="{{ folder.icons.32 }}" alt="{% trans "Folder Icon" %}" />
-
-                <h1 class="folder_header inline middle">
-                {{ folder.name }}
-
-                 <small class="middle inline">
-                    <i class="ace-icon fa fa-angle-double-right"></i>
-                    <span>({% blocktrans count folder.children.count as counter %}1 folder{% plural %}{{ counter }} folders{% endblocktrans %}, {% blocktrans count folder.files.count as counter %}1 file{% plural %}{{ counter }} files{% endblocktrans %})</span><span class="green left-20"><i class="ace-icon fa fa-share"></i>{{ folder.get_folder_type_display }}{% if folder.site %}: {{folder.site}}{%endif%}</span>
-                </small>
-                </h1>
-
-
-                {% if is_popup %}
-                    {% if select_folder and folder.file_type == 'Folder' %}<a class="insertlink insertlinkButton" href="" onclick="opener.dismissRelatedFolderLookupPopup(window, {{ folder.id }}, '{{ folder.quoted_logical_path }}'); return false;" >&nbsp;</a>{% endif %}
-                {% elif folder|can_change_folder:user %}<a class="changelink block pull-right" href="{% url 'admin:filer_folder_change' folder.id %}" title="{% trans "Change current folder details" %}"><i class="ace-icon fa fa-pencil"></i><span>{% trans "Change" %}</span></a>{% endif %}
-            </div>
-
+   {% if not is_popup %}
+        <div class="breadcrumbs">
+            <a href="{% url 'admin:index' %}" title="{% trans 'Go back to admin homepage' %}">
+                {% trans "Home" %}
+            </a>
+            &rsaquo;
+            <a href="{% url 'admin:app_list' app_label='filer' %}" title="{% trans 'Go back to Filer app' %}">
+                {% trans "Filer" %}
+            </a>
+            &rsaquo; <a href="{% url 'admin:filer-directory_listing-root' %}{% filer_admin_context_url_params %}" title="{% translate 'Go back to root folder' %}">{% translate "Folder" %}</a>
+            {% for ancestor_folder in folder.logical_path %}
+                &rsaquo;
+                <a href="{{ ancestor_folder.get_admin_directory_listing_url_path }}{% filer_admin_context_url_params %}"
+                    title="{% blocktrans with ancestor_folder.name as folder_name %}Go back to '{{ folder_name }}' folder{% endblocktrans %}">
+                    {% if ancestor_folder.label %}{{ ancestor_folder.label }}{% else %}{{ ancestor_folder.name }}{% endif %}
+                </a>
+            {% endfor %}
+            &rsaquo; {% if folder.label %}{{ folder.label }}{% else %}{{ folder.name }}{% endif %}
+            {% if breadcrumbs_action %}
+                &rsaquo;
+                <a href="{{ folder.get_admin_directory_listing_url_path }}"
+                    title="{% blocktrans with folder.name as folder_name %}Go back to '{{ folder_name }}' folder{% endblocktrans %}">
+                    {% if folder.label %}
+                        {{ folder.label }}
+                    {% else %}
+                        {{ folder.name }}
+                    {% endif %}
+                </a>
+                &rsaquo;
+                {{ breadcrumbs_action }}
             {% else %}
-            {% if folder.is_smart_folder %}
-            <div class="page-header">
-                <a href="{% url 'admin:filer-directory_listing-root' %}{% get_popup_params %}" class="middle go-up"><i class="ace-icon fa fa-long-arrow-up bigger-125 pink"></i></a>
-                <img src="{{ folder.icons.32 }}" alt="{% trans "Folder Icon" %}" />
-                <h1 class="folder_header inline middle">
-                    {{ folder.name }}
-                </h1>
-            </div>
+                {% if not instance.is_root and instance.is_smart_folder %}
+                    &rsaquo;
+                {% endif %}
+                {% if instance.label %}
+                    {{ instance.label }}
+                {% else %}
+                    {{ instance.name }}
+                {% endif %}
             {% endif %}
-        {% endif %}
+        </div>
+    {% endif %}
+{% endblock %}
 
-        <form id="changelist-form" action="" method="post">{% csrf_token %}
-        {% if is_popup %}<input type="hidden" name="_popup" value="1" />{% endif %}
-        {% if action_form and actions_on_top and paginator.count and not select_folder and not is_popup %}{% filer_actions %}{% endif %}
-        {% include "admin/filer/folder/directory_table.html" %}
-        {% if action_form and actions_on_bottom and paginator.count and not select_folder and not is_popup %}{% filer_actions %}{% endif %}
-        </form>
-        <script type="text/javascript">
-        var _clicks = 0;
-        django.jQuery("#changelist-form").submit(function () {
-            _clicks++;
-            if(_clicks > 1) { return false; }
-        });
-        </script>
+{% block sidebar %}{% endblock %}
+
+{% block content_title %}
+    <h2>&nbsp;</h2>
+{% endblock %}
+
+{% block object-tools %}
+{% endblock %}
+
+{% block content %}
+    <div class="navigator-top-nav clearfix">
+        <div class="breadcrumbs-container-wrapper">
+            <div class="breadcrumbs-container">
+                <div class="breadcrumbs-container-inner">
+                    {% for ancestor_folder in instance.logical_path %}
+                        {{ ancestor_folder }}
+                    {% endfor %}
+
+                    <div class="navigator-breadcrumbs">
+                        <div class="filer-navigator-breadcrumbs-dropdown-container filer-dropdown-container">
+                            <a href="#" data-toggle="filer-dropdown" aria-expanded="false">
+                                <img src="{% static 'filer/icons/folder-dropdown.svg' %}" alt="" width="28" height="28">
+                            </a>
+                            <ul class="filer-dropdown-menu navigator-breadcrumbs-dropdown">
+                                {% for folder in folder.logical_path reversed %}
+                                    <li>
+                                        <a href="{% url 'admin:filer-directory_listing' folder.id %}{% filer_admin_context_url_params %}"
+                                            title="{% trans 'Go back to the parent folder' %}">
+                                            <img src="{% static 'filer/icons/folder.svg' %}" alt="{% trans 'Folder Icon' %}" width="28" height="28">
+                                            {{ folder.name }}
+                                        </a>
+                                    </li>
+                                {% endfor %}
+                                <li>
+                                    <a href="{% url 'admin:filer-directory_listing-root' %}{% filer_admin_context_url_params %}"
+                                        title="{% trans 'Go back to' %} {% trans 'root'|title %} {% trans 'folder' %}">
+                                        <img src="{% static 'filer/icons/folder-root.svg' %}" alt="{% trans 'Folder Icon' %}" width="28" height="28">
+                                        Root
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        {% if not folder.is_root or folder.is_smart_folder %}
+                            <span class="icon filer-icon filer-icon-chevron-right fa fa-chevron-right"></span>
+                        {% endif %}
+                    </div>
+                    <div class="navigator-breadcrumbs-name-dropdown-wrapper">
+                        {% if not folder.is_root or folder.is_smart_folder %}
+
+                            <div class="navigator-breadcrumbs-folder-name-wrapper">
+                                <span class="navigator-breadcrumbs-folder-name">
+                                    <span class="navigator-breadcrumbs-folder-name-inner">
+                                        {{ folder.name }}
+                                    </span>
+                                </span>
+                            </div>
+
+                            <div class="filer-dropdown-container filer-dropdown-container-down">
+                                {% if not is_popup and folder.file_type == 'Folder' and permissions.has_edit_permission %}
+                                    <a href="#" data-toggle="filer-dropdown" aria-expanded="false">
+                                        <span class="filer-icon filer-icon-caret-down fa fa-caret-down"></span>
+                                    </a>
+                                    <ul class="filer-dropdown-menu">
+                                        <li>
+                                            <a href="{% url 'admin:filer_folder_change' folder.id %}{% filer_admin_context_url_params %}" title="{% trans 'Change current folder details' %}">{% trans "Change" %}</a>
+                                        </li>
+                                    </ul>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                        <div class="empty-filer-header-cell"></div>
+                    </div>
+                    <form class="filter-files-container js-filter-files-container" action="." method="get" class="js-filer-search-form">
+                        <div class="filter-filers-container-inner">
+                            <button class="navigator-button filter-files-button" title="{% trans 'Click here to run search for entered phrase' %}"><span class="icon fa fa-search cms-icon cms-icon-search"></span></button>
+                            <div class="filter-search-wrapper">
+                                {% filer_admin_context_hidden_formfields %}
+                                <input type="text" placeholder="{% trans 'Search' %}" class="filter-files-field js-filter-files" value="{{ search_string }}" name="q">
+                                <div class="filer-dropdown-container filer-dropdown-container-down">
+                                    <a href="#" data-toggle="filer-dropdown" aria-expanded="false">
+                                        <span class="filer-icon filer-icon-caret-down fa fa-caret-down"></span>
+                                    </a>
+                                </div>
+                                <ul class="filer-dropdown-menu filer-dropdown-menu-checkboxes">
+                                    <span class="fa fa-close cms-icon cms-icon-close js-close-dropdown-menu-checkboxes"><span class="sr-only">{% trans "Close" %}</span></span>
+                                    <li>
+                                        <p>{% trans "Limit" %}</p>
+                                        <label>
+                                            <input type="checkbox" id="limit_search_to_folder"
+                                               name="limit_search_to_folder"
+                                               {% if limit_search_to_folder %}checked="checked"{% endif %}
+                                               title="{% trans 'Check it to limit the search to current folder' %}">
+                                            {% trans "Limit the search to current folder" %}
+                                        </label>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                </form>
+                </div>
+            </div>
+            <div class="tools-container">
+                {% block filer-tools %}
+                    <div class="navigator-tools">
+                        {% if not is_popup %}
+                            <div class="actions-wrapper">
+                                <ul class="actions-separated-list">
+                                    <li>
+                                        <a href="#" class="js-action-delete" title="{% trans 'Delete' %}"><span class="fa fa-trash cms-icon cms-icon-bin"></span></a>
+                                    </li>
+                                    <li>
+                                        <a href="#" class="js-action-copy" title="{% trans 'Copy' %}"><span class="fa fa-copy cms-icon cms-icon-copy fa fa-copy"></span></a>
+                                    </li>
+                                    <li>
+                                        <a href="#" class="js-action-move" title="{% trans 'Move' %}"><span class="fa fa-folder filer-icon filer-icon-move-to-folder fa fa-cut"></span></a>
+                                    </li>
+                                </ul>
+                                <div class="filer-dropdown-container js-actions-menu">
+                                    <a href="#" data-toggle="filer-dropdown" aria-expanded="false" class="nav-button nav-button-dots">
+                                        <span class="fa fa-ellipsis-h cms-icon cms-icon-menu"></span>
+                                    </a>
+                                    <ul class="create-menu-dropdown filer-dropdown-menu">
+                                        {# This list is populated in javascript #}
+                                    </ul>
+                                </div>
+                            </div>
+                        {% endif %}
+                        <div class="filer-list-type-switcher-wrapper">
+                            <ul class="actions-separated-list">
+                                <li>{% filer_folder_list_type_switcher %}</li>
+                            </ul>
+                        </div>
+                        {% block filer-tools-items %}
+                            <div class="navigator-button-wrapper">
+                                {% if folder.can_have_subfolders and can_make_folder %}
+                                    <a href="{% url 'admin:filer-directory_listing-make_root_folder' %}?parent_id={{ folder.pk|safe }}{% if is_popup %}&amp;_popup=1{% endif %}"
+                                        title="{% trans 'Adds a new Folder' %}"
+                                        class="navigator-button"
+                                        onclick="return showAddAnotherPopup(this);">
+                                        {% trans "New Folder" %}
+                                    </a>
+                                {% endif %}
+
+                                {% if permissions.has_add_children_permission and not folder.is_root %}
+                                    <a href="#" id="id_upload_button" title="{% trans 'Upload Files' %}"
+                                        class="navigator-button navigator-button-upload js-upload-button"
+                                        data-url="{% url 'admin:filer-ajax_upload' folder_id=folder.id %}"
+                                        data-max-uploader-connections="{{ uploader_connections }}"
+                                        data-max-files="{{ max_files|safe }}"
+                                        {% if max_filesize %}data-max-filesize="{{ max_filesize|safe }}"{% endif %}
+                                    >
+                                        {% trans "Upload Files" %}
+                                    </a>
+                                {% elif folder.is_unsorted_uploads %}
+                                    <a href="#" id="id_upload_button" title="{% trans 'Upload Files' %}"
+                                        class="navigator-button navigator-button-upload js-upload-button"
+                                        data-url="{% url 'admin:filer-ajax_upload' %}"
+                                        data-max-uploader-connections="{{ uploader_connections }}"
+                                        data-max-files="{{ max_files|safe }}"
+                                        {% if max_filesize %}data-max-filesize="{{ max_filesize|safe }}"{% endif %}
+                                    >
+                                        {% trans "Upload Files" %}
+                                    </a>
+                                {% endif %}
+                                {% if folder.is_root and not folder.is_unsorted_uploads %}
+                                    <span class="js-upload-button-disabled upload-button-disabled js-filer-tooltip filer-tooltip-wrapper"
+                                            title="{% trans 'You have to select a folder first' %}">
+                                        <a href="#" class="navigator-button navigator-button-upload" disabled>
+                                            {% trans "Upload Files" %}
+                                        </a>
+                                    </span>
+                                {% endif %}
+                            </div>
+                        {% endblock %}
+                    </div>
+                {% endblock %}
+            </div>
+        </div>
     </div>
-</div>
-
+    <div id="content-main">
+        {% include "admin/filer/tools/search_form.html" %}
+        <div class="js-navigator navigator{% if not actions_on_top and not actions_on_bottom %}navigator-no-actions{% endif %}">
+            <form class="js-navigator-form" method="post" id="changelist-form">
+                {% csrf_token %}
+                {% filer_admin_context_hidden_formfields %}
+                {% if action_form and actions_on_top and paginator.count and not is_popup %}
+                    {% filer_actions %}
+                {% endif %}
+                {% include list_type_template %}
+                {% if action_form and actions_on_bottom and paginator.count and not is_popup %}
+                    {% filer_actions %}
+                {% endif %}
+            </form>
+        </div>
+    </div>
 {% endblock %}

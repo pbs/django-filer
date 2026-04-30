@@ -1,0 +1,23 @@
+{% extends "admin/filer/change_form.html" %}
+{% load i18n admin_modify static %}
+
+{% block extrahead %}
+    {{ block.super }}
+
+    {# upload stuff #}
+    <script src="{% static 'admin/js/admin/RelatedObjectLookups.js' %}"></script>
+    <script src="{% static 'filer/js/dist/filer-base.bundle.js' %}"></script>
+{% endblock %}
+
+
+{% block object-tools %}
+    {% if change and not is_popup %}
+        <ul class="object-tools">
+            <li><a href="{% url history_url object_id %}" class="historylink">{% translate "History" %}</a></li>
+            {% if has_absolute_url %}
+                <li><a href="../../../r/{{ content_type_id }}/{{ object_id }}/" class="viewsitelink">{% translate "View on site" %}</a></li>
+            {% endif%}
+        </ul>
+    {% endif %}
+    {% include "admin/filer/tools/detail_info.html" %}
+{% endblock %}

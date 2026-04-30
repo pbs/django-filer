@@ -1,36 +1,41 @@
-{% extends "admin/filer/change_form.html" %}
-{% load i18n admin_modify filermedia filer_admin_tags %}
+{% extends "admin/change_form.html" %}
+{% load i18n admin_modify static filer_admin_tags %}
 
-{% block extrahead %}
-	{{ block.super }}
-	<script type="text/javascript">
-	(function($) {
-		$( document ).ready(function() {
-			$('.field-restricted').not(':has(input)').addClass('field-restricted-read-only');
-		});
-	})(django.jQuery);
-	</script>
+{% block breadcrumbs %}
+    <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}" title="{% translate 'Go back to' %} {% translate 'admin homepage' %}">{% translate "Home" %}</a>
+        &rsaquo; <a href="{% url 'admin:app_list' app_label='filer' %}" title="{% translate 'Go back to' %} {% translate 'Filer' %}"> {% translate "Filer" %}</a>
+        &rsaquo; <a href="{% url 'admin:filer-directory_listing-root' %}" title="{% translate 'Go back to' %} '{% translate 'root'|title %}' {% translate 'folder' %}">{% translate "root"|title %}</a>
+        {% for ancestor_folder in original.logical_path %}
+            &rsaquo; <a href="{% url 'admin:filer-directory_listing' ancestor_folder.id %}" title="{% blocktrans with ancestor_folder.name as folder_name %}Go back to '{{ folder_name }}' folder{% endblocktrans %}">{{ ancestor_folder.name }}</a>
+        {% endfor %}
+        &rsaquo; {{ original.name }}
+    </div>
 {% endblock %}
 
 {% block coltype %}{% if is_popup %}colM{% else %}colMS{% endif %}{% endblock %}
 
 {% block object-tools %}
-{% if change %}{% if not is_popup %}
-  <ul class="object-tools list-unstyled list-inline text-right">
-      <li><a href="history/" class="historylink btn btn-warning btn-sm"><i class="ace-icon fa fa-clock-o"></i>{% trans "History" %}</a></li>
-  {% if has_absolute_url %}<li><a href="../../../r/{{ content_type_id }}/{{ object_id }}/" class="viewsitelink  btn btn-purple btn-sm"><i class="ace-icon fa fa-external-link"></i>{% trans "View on site" %}</a></li>{% endif%}
-  </ul>
-{% endif %}{% endif %}
+    {% if change and not is_popup %}
+        <ul class="object-tools">
+            <li><a href="{% url history_url object_id %}" class="historylink">{% translate "History" %}</a></li>
+            {% if has_absolute_url %}
+                <li><a href="../../../r/{{ content_type_id }}/{{ object_id }}/" class="viewsitelink">{% translate "View on site" %}</a></li>
+            {% endif%}
+        </ul>
+    {% endif %}
 {% endblock %}
 
 {% block after_field_sets %}
-{% if is_popup and select_folder %}<input type="hidden" name="select_folder" value="1" />{% endif %}
+    {% filer_admin_context_hidden_formfields %}
 {% endblock %}
 
-{% block sidebar %}{% endblock %}
-
-{% block submit_buttons_bottom %}
-    {% if not original or not original|is_restricted_for_user:user %}
-			{% submit_row %}
+{% block sidebar %}
+    {% if not is_popup %}
+        <div id="content-related">
+            <div id="navcontainer">
+                <img src="{% static 'filer/icons/folder.svg' %}" alt="{% translate 'Folder Icon' %}" width="128" height="128" />
+            </div>
+        </div>
     {% endif %}
 {% endblock %}
