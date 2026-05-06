@@ -385,7 +385,13 @@ class File(PolymorphicModel,
         if self._old_sha1 != self.sha1:
             # actual file content needs to be replaced on storage prior to
             #   filer file instance save
-            self.file.storage.save(self._current_file_location, self.file)
+            if self._current_file_location:
+                self.file.storage.save(self._current_file_location, self.file)
+            else:
+                # New file — save to the computed target location directly
+                target = self.file.field.upload_to(self, self.upload_to_name)
+                self.file.storage.save(target, self.file)
+                self._current_file_location = target
             self._old_sha1 = self.sha1
         new_location = self.file.field.upload_to(self, self.upload_to_name)
         storage = self.file.storage
@@ -410,12 +416,12 @@ class File(PolymorphicModel,
                     copy_and_save()
             except:
                 # delete the file from new_location if the db update failed
-                if old_location != new_location:
+                if old_location and old_location != new_location:
                     storage.delete(new_location)
                 raise
             else:
                 # only delete the file on the old_location if all went OK
-                if old_location != new_location:
+                if old_location and old_location != new_location:
                     storage.delete(old_location)
         else:
             copy_and_save()
