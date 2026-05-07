@@ -125,6 +125,8 @@ class Image(File):
         except Exception:
             # probably the image is missing. nevermind.
             pass
+        logger.info("[Image.save] before super().save() - pk=%s, mime_type=%r, original_filename=%r",
+                    self.pk, getattr(self, 'mime_type', 'MISSING'), self.original_filename)
         super(Image, self).save(*args, **kwargs)
 
     def _check_validity(self):
