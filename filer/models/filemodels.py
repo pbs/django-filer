@@ -311,6 +311,12 @@ class File(PolymorphicModel,
 
     def save(self, *args, **kwargs):
         self.set_restricted_from_folder()
+        # Auto-populate mime_type if the field exists and is empty
+        # (mime_type is added by PBS/Bento via custom migration)
+        if hasattr(self, 'mime_type') and not self.mime_type:
+            import mimetypes
+            filename = self.original_filename or (self.file.name if self.file else '')
+            self.mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
         # check if this is a subclass of "File" or not and set
         # _file_type_plugin_name
         if self.__class__ == File:
