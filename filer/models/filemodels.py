@@ -157,6 +157,10 @@ class File(PolymorphicModel,
                     'snippet but will not be able to delete or '
                     'modify the current version of the asset.'))
 
+    mime_type = models.CharField(
+        _('MIME type'), max_length=255, default='application/octet-stream',
+        help_text=_('Auto-detected MIME type of the file.'))
+
     objects = AliveFileManager()
     trash = TrashFileManager()
     all_objects = FileManager()
@@ -311,12 +315,13 @@ class File(PolymorphicModel,
 
     def save(self, *args, **kwargs):
         self.set_restricted_from_folder()
-        # Auto-populate mime_type if the field exists and is empty
-        # (mime_type is added by PBS/Bento via custom migration)
-        if hasattr(self, 'mime_type') and not self.mime_type:
+        # Auto-populate mime_type from filename if still at default
+        if self.mime_type == 'application/octet-stream':
             import mimetypes
             filename = self.original_filename or (self.file.name if self.file else '')
-            self.mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+            guessed = mimetypes.guess_type(filename)[0]
+            if guessed:
+                self.mime_type = guessed
         # check if this is a subclass of "File" or not and set
         # _file_type_plugin_name
         if self.__class__ == File:
