@@ -316,18 +316,12 @@ class File(PolymorphicModel,
     def save(self, *args, **kwargs):
         self.set_restricted_from_folder()
         # Auto-populate mime_type from filename if still at default
-        logger.info("[File.save] START pk=%s, class=%s, mime_type=%r, original_filename=%r",
-                    self.pk, self.__class__.__name__, self.mime_type, self.original_filename)
-        if not self.mime_type or self.mime_type == 'application/octet-stream':
+        if self.mime_type == 'application/octet-stream':
             import mimetypes
             filename = self.original_filename or (self.file.name if self.file else '')
             guessed = mimetypes.guess_type(filename)[0]
-            logger.info("[File.save] mime_type auto-detect: filename=%r, guessed=%r", filename, guessed)
             if guessed:
                 self.mime_type = guessed
-            elif not self.mime_type:
-                self.mime_type = 'application/octet-stream'
-        logger.info("[File.save] mime_type after auto-detect: %r", self.mime_type)
         # check if this is a subclass of "File" or not and set
         # _file_type_plugin_name
         if self.__class__ == File:
@@ -360,8 +354,6 @@ class File(PolymorphicModel,
             self._force_commit = True
             self.update_location_on_storage(*args, **kwargs)
         else:
-            logger.info("[File.save] direct super().save() path - mime_type=%r, pk=%s",
-                        self.mime_type, self.pk)
             super(File, self).save(*args, **kwargs)
 
     save.alters_data = True
@@ -419,8 +411,6 @@ class File(PolymorphicModel,
             saved_as = self._copy_file(new_location)
             assert saved_as == new_location, '%s %s' % (saved_as, new_location)
             self.file = saved_as
-            logger.info("[File.update_location] before super().save() - mime_type=%r, pk=%s",
-                        self.mime_type, self.pk)
             super(File, self).save(*args, **kwargs)
 
         if self._force_commit:
