@@ -201,25 +201,11 @@
 - **Fix:** Added `old_location` truthiness check before both `storage.delete()` calls
 - **Error:** `ValueError: The name must be given to delete().`
 
-#### 14c. Added `mime_type` model field + auto-populate on save
-- **Problem:** The PBS/Bento database has a `mime_type` NOT NULL column on `filer_file` (added by a Bento migration), but the filer `File` model had no corresponding field. Django's INSERT SQL omitted the column, causing `null value in column "mime_type" violates not-null constraint`
-- **Fix:** Added `mime_type` as a proper `CharField` on `File` with `default='application/octet-stream'`. Added migration `0008_add_mime_type_to_file.py`. In `save()`, auto-detects MIME type from `original_filename` using `mimetypes.guess_type()` when still at the default value
-- **Migration:** `filer/migrations/0008_add_mime_type_to_file.py` — On Bento (where column already exists), this migration will need to be faked or made conditional
-- **Code:**
-  ```python
-  # Model field
-  mime_type = models.CharField(
-      _('MIME type'), max_length=255, default='application/octet-stream',
-      help_text=_('Auto-detected MIME type of the file.'))
-
-  # In save():
-  if self.mime_type == 'application/octet-stream':
-      import mimetypes
-      filename = self.original_filename or (self.file.name if self.file else '')
-      guessed = mimetypes.guess_type(filename)[0]
-      if guessed:
-          self.mime_type = guessed
-  ```
+#### 14c. ~~Added `mime_type` model field~~ — **Reverted**
+- **Original problem:** The PBS/Bento database has a `mime_type` NOT NULL column on `filer_file` (added by a Bento migration), but the filer `File` model had no corresponding field. Django's INSERT SQL omitted the column, causing `null value in column "mime_type" violates not-null constraint`
+- **Original fix:** Added `mime_type` as a `CharField` on `File` model + migration `0008_add_mime_type_to_file.py`
+- **Reverted because:** The migration didn't run in GHA CI (sqlite test DB was created without the column), causing 129 test failures with `no such column: filer_file.mime_type`. The `mime_type` column is managed by Bento-side migrations, not by django-filer — it should stay that way
+- **Current status:** `mime_type` field and migration `0008` removed from filer. The Bento DB column remains managed by Bento's own migrations with its own DB-level default
 
 ---
 
@@ -248,8 +234,7 @@ These features exist in the PBS fork but not in upstream django-filer:
 | `setup.py` | Build fix (regex version reader) |
 | `filer/__init__.py` | PEP 440 version fix |
 | `filer/models/abstract.py` | Import guard for VILImage |
-| `filer/models/filemodels.py` | Empty filename guard in `update_location_on_storage`, `storage.delete('')` guard, `mime_type` field + auto-populate |
-| `filer/migrations/0008_add_mime_type_to_file.py` | New migration for `mime_type` field (fake on Bento if column exists) |
+| `filer/models/filemodels.py` | Empty filename guard in `update_location_on_storage`, `storage.delete('')` guard |
 | `filer/admin/fileadmin.py` | Readonly fields fix, `is_readonly_file` context flag |
 | `filer/admin/folderadmin.py` | 13 separate fixes (AJAX view, move/copy validation, MPTT, field visibility, delete guards, restriction actions) |
 | `filer/admin/views.py` | NewFolderForm site field, parent-before-validation, paste guards |
