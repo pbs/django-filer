@@ -207,6 +207,18 @@
 - **Reverted because:** The migration didn't run in GHA CI (sqlite test DB was created without the column), causing 129 test failures with `no such column: filer_file.mime_type`. The `mime_type` column is managed by Bento-side migrations, not by django-filer — it should stay that way
 - **Current status:** `mime_type` field and migration `0008` removed from filer. The Bento DB column remains managed by Bento's own migrations with its own DB-level default
 
+### 15. Cache invalidation for folder listings (new feature)
+
+- **Problem:** The `django_filer_rest` REST API caches folder listings with key `django_filer_rest.folder-listing:{site_id}:{folder_id}`. After file/folder operations (upload, move, copy, delete, restore, rename, restriction toggle), the cache was stale
+- **Fix:** Created `filer/utils/cache.py` with `invalidate_folder_listing_cache()` and `invalidate_folder_listing_cache_for_file()` utilities. Wired cache invalidation into model methods:
+  - `File.save()` — invalidates current folder + old folder (if file moved between folders)
+  - `File.soft_delete()` — invalidates the folder the file was in
+  - `File.restore()` — invalidates the folder the file was restored to
+  - `Folder.save()` — invalidates the folder itself and its parent
+  - `Folder.soft_delete()` — invalidates the folder and its parent
+  - `Folder.restore()` — invalidates the folder and its parent
+- **Note:** All invalidation uses inline imports to avoid circular import issues at module load time
+
 ---
 
 ## PBS-Specific Features Preserved
@@ -234,7 +246,8 @@ These features exist in the PBS fork but not in upstream django-filer:
 | `setup.py` | Build fix (regex version reader) |
 | `filer/__init__.py` | PEP 440 version fix |
 | `filer/models/abstract.py` | Import guard for VILImage |
-| `filer/models/filemodels.py` | Empty filename guard in `update_location_on_storage`, `storage.delete('')` guard |
+| `filer/models/filemodels.py` | Empty filename guard in `update_location_on_storage`, `storage.delete('')` guard, cache invalidation on save/delete/restore |
+| `filer/models/foldermodels.py` | Cache invalidation on save/soft_delete/restore |
 | `filer/admin/fileadmin.py` | Readonly fields fix, `is_readonly_file` context flag |
 | `filer/admin/folderadmin.py` | 13 separate fixes (AJAX view, move/copy validation, MPTT, field visibility, delete guards, restriction actions) |
 | `filer/admin/views.py` | NewFolderForm site field, parent-before-validation, paste guards |
@@ -246,4 +259,5 @@ These features exist in the PBS fork but not in upstream django-filer:
 | `filer/templates/admin/filer/submit_line.html` | Delete URL pk guard |
 | `filer/templates/admin/filer/file/change_form.html` | Suppress submit row for readonly files |
 | `filer/utils/cdn.py` | `modified_at` None guard |
+| `filer/utils/cache.py` | New file — folder listing cache invalidation utilities |
 | `filer/tests/admin.py` | Test compatibility fixes |

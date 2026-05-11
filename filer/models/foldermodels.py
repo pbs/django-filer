@@ -11,6 +11,7 @@ from urllib.parse import quote
 from filer.utils.cms_roles import *
 from filer.models import mixins
 from filer import settings as filer_settings
+from filer.utils.cache import invalidate_folder_listing_cache
 from django.utils import timezone
 import mptt
 import itertools
@@ -284,6 +285,7 @@ class Folder(models.Model, mixins.IconsMixin):
             self.set_metadata_from_parent()
             super(Folder, self).save(*args, **kwargs)
             self.update_descendants_metadata()
+            invalidate_folder_listing_cache(self)
             return
 
         storages = []
@@ -317,6 +319,7 @@ class Folder(models.Model, mixins.IconsMixin):
             raise
         else:
             delete_from_locations(old_locations, storages)
+        invalidate_folder_listing_cache(self)
 
     def soft_delete(self):
         deletion_time = timezone.now()
@@ -331,6 +334,8 @@ class Folder(models.Model, mixins.IconsMixin):
         Folder.objects.filter(
             id__in=desc_ids).update(deleted_at=deletion_time)
         self.deleted_at = deletion_time
+        # Invalidate cache for this folder and its parent
+        invalidate_folder_listing_cache(self)
 
     def hard_delete(self):
         # This would happen automatically by ways of the delete
@@ -395,6 +400,8 @@ class Folder(models.Model, mixins.IconsMixin):
         for filer_file in files_qs:
             filer_file.restore()
         self.deleted_at = None
+        # Invalidate cache for this folder and its parent
+        invalidate_folder_listing_cache(self)
 
     @property
     def trashed_file_count(self):

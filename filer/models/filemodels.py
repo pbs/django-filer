@@ -16,6 +16,7 @@ from filer.models import mixins
 from filer.utils.cms_roles import *
 from filer.utils.files import matching_file_subtypes
 from filer import settings as filer_settings
+from filer.utils.cache import invalidate_folder_listing_cache, invalidate_folder_listing_cache_for_file
 from django.db.models import Count
 from django.utils import timezone
 
@@ -338,6 +339,8 @@ class File(PolymorphicModel,
         except (IOError, TypeError, ValueError) as e:
             pass
         replaced_file = self._old_sha1 != self.sha1
+        # Track old folder for cache invalidation when file moves between folders
+        old_folder_id = self._old_folder_id
         if filer_settings.FOLDER_AFFECTS_URL and (self._is_path_changed() or replaced_file):
             if replaced_file and not self._is_name_changed():
                 self.name = None  # if new file submitted for same id we overwrite what was previously in name
@@ -345,6 +348,17 @@ class File(PolymorphicModel,
             self.update_location_on_storage(*args, **kwargs)
         else:
             super(File, self).save(*args, **kwargs)
+        # Invalidate cache for the current folder
+        invalidate_folder_listing_cache_for_file(self)
+        # If file moved between folders, also invalidate the old folder
+        new_folder_id = getattr(self.folder, 'id', None)
+        if old_folder_id and old_folder_id != new_folder_id:
+            try:
+                old_folder = filer.models.foldermodels.Folder.all_objects.get(
+                    id=old_folder_id)
+                invalidate_folder_listing_cache(old_folder)
+            except filer.models.foldermodels.Folder.DoesNotExist:
+                pass
 
     save.alters_data = True
 
@@ -473,6 +487,8 @@ class File(PolymorphicModel,
 
             self.deleted_at = deletion_time
             self.file = new_location
+        # Invalidate cache for the folder this file was in
+        invalidate_folder_listing_cache_for_file(self)
 
     def hard_delete(self, *args, **kwargs):
         """
@@ -562,6 +578,8 @@ class File(PolymorphicModel,
                     clipboard.append_file(File.objects.get(id=self.id))
                 except auth_models.User.DoesNotExist:
                     pass
+        # Invalidate cache for the folder this file was restored to
+        invalidate_folder_listing_cache_for_file(self)
 
     @property
     def label(self):
