@@ -23,10 +23,6 @@ from django.utils import timezone
 from polymorphic.models import PolymorphicModel
 from polymorphic.managers import PolymorphicManager
 from polymorphic.query import PolymorphicQuerySet
-import hashlib
-import os
-import filer
-import logging
 
 logger = logging.getLogger(__name__)
 
