@@ -25,20 +25,11 @@
 
 ### 1. `setup.py` — Build-time import error (GHA blocker)
 
-- **Problem:** `__import__('filer').__version__` fails because Django isn't installed in the build environment
-- **Fix:** Replaced with regex-based `get_version()` that reads `filer/__init__.py` without importing
-- **Also:** Removed deprecated `setuptools.command.test` references and `test_suite`/`tests_require`
-- **Code:**
-  ```python
-  def get_version():
-      """Read version from filer/__init__.py without importing the package."""
-      init_py = os.path.join(os.path.dirname(__file__), 'filer', '__init__.py')
-      with open(init_py) as f:
-          match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", f.read(), re.M)
-      if not match:
-          raise RuntimeError("Cannot find __version__ in filer/__init__.py")
-      return match.group(1)
-  ```
+- **Problem:** `__import__('filer').__version__` can fail because Django may not be installed in the build environment
+- **Current PR state:** The `setup.py` changes described below are **not reflected in the current file**; `setup.py` still needs to be updated if we want this note to become true
+- **Pending follow-up:** Replace the import-based version lookup with a regex-based `get_version()` that reads `filer/__init__.py` without importing the package
+- **Pending follow-up:** Remove deprecated `setuptools.command.test` usage and the `test_suite`/`tests_require` metadata once `setup.py` is actually updated
+- **Note:** The earlier version of this document incorrectly described these changes as already applied
 
 ### 2. `filer/__init__.py` — PEP 440 version
 
