@@ -219,6 +219,12 @@
   - `Folder.restore()` — invalidates the folder and its parent
 - **Note:** All invalidation uses inline imports to avoid circular import issues at module load time
 
+### 16. `filer/admin/forms.py` — `_html_output` removed in Django 5.1
+
+- **Problem:** `AsPWithHelpMixin.as_p_with_help()` called `self._html_output()` which was removed in Django 5.1 (`RemovedInDjango50Warning` → fully removed in 5.1)
+- **Fix:** Rewrote `as_p_with_help()` to manually iterate `self.fields`, render each `BoundField` with label/field/errors/help_text using the same HTML structure
+- **Error:** `AttributeError: 'CopyFilesAndFoldersForm' object has no attribute '_html_output'`
+
 ---
 
 ## PBS-Specific Features Preserved
@@ -260,4 +266,5 @@ These features exist in the PBS fork but not in upstream django-filer:
 | `filer/templates/admin/filer/file/change_form.html` | Suppress submit row for readonly files |
 | `filer/utils/cdn.py` | `modified_at` None guard |
 | `filer/utils/cache.py` | New file — folder listing cache invalidation utilities |
+| `filer/admin/forms.py` | Replaced `_html_output` (removed in Django 5.1) in `AsPWithHelpMixin.as_p_with_help()` |
 | `filer/tests/admin.py` | Test compatibility fixes |
