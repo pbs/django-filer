@@ -31,10 +31,10 @@
 - **Pending follow-up:** Remove deprecated `setuptools.command.test` usage and the `test_suite`/`tests_require` metadata once `setup.py` is actually updated
 - **Note:** The earlier version of this document incorrectly described these changes as already applied
 
-### 2. `filer/__init__.py` — PEP 440 version
+### 2. `filer/__init__.py` — version note
 
-- **Problem:** `3.5.0.pbs.1` is invalid per PEP 440
-- **Fix:** Changed to `3.5.0+pbs.1` (local version identifier)
+- **Problem:** This fork ships `0.9.123`, so the previous note about changing `3.5.0.pbs.1` to `3.5.0+pbs.1` did not match the actual version in this PR
+- **Fix:** Removed the incorrect PEP 440 migration note and documented the shipped fork version accurately
 
 ### 3. `filer/models/abstract.py` — VILImage import
 
