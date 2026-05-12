@@ -118,35 +118,21 @@ class ClipboardAdmin(admin.ModelAdmin):
         """
         receives an upload from the uploader. Receives only one file at the time.
         """
-        logger.info("[ajax_upload] START - user=%s, method=%s, folder_id=%s, is_ajax=%s",
-                     request.user, request.method, folder_id, is_ajax(request))
-        logger.info("[ajax_upload] GET params: %s", dict(request.GET))
-        logger.info("[ajax_upload] FILES keys: %s", list(request.FILES.keys()))
-        logger.info("[ajax_upload] Content-Type: %s, Content-Length: %s",
-                     request.content_type, request.META.get('CONTENT_LENGTH'))
-
         mimetype = "application/json" if is_ajax(request) else "text/html"
         upload, file_obj, clipboard_item = None, None, None
         try:
             upload, original_filename, _ = handle_upload(request)
-            logger.info("[ajax_upload] handle_upload OK - original_filename=%s, upload.name=%s, upload.size=%s",
-                         original_filename, getattr(upload, 'name', None), getattr(upload, 'size', None))
 
             filename = truncate_filename(upload, maxlen=FILENAME_LIMIT)
-            logger.info("[ajax_upload] truncated filename=%s", filename)
             upload.name = filename # the upload raw has also the title saved in a CharField
 
             # Get clipboad
             clipboard, created = Clipboard.objects.get_or_create(user=request.user)
-            logger.info("[ajax_upload] clipboard id=%s, created=%s", clipboard.id, created)
 
-            existing_files = list(clipboard.files.all().values_list('original_filename', flat=True))
-            logger.info("[ajax_upload] existing clipboard files: %s", existing_files)
             if any(f for f in clipboard.files.all() if f.original_filename == filename):
                 raise UploadException(self.messages['already-exists'].format(filename))
 
             matched_file_types = matching_file_subtypes(filename, upload, request)
-            logger.info("[ajax_upload] matched_file_types=%s", matched_file_types)
 
             FileForm = modelform_factory(
                 model=matched_file_types[0],
@@ -156,25 +142,20 @@ class ClipboardAdmin(admin.ModelAdmin):
                                    'owner': request.user.pk},
                                   {'file': upload})
             if uploadform.is_valid():
-                logger.info("[ajax_upload] form is valid, saving file_obj...")
                 file_obj = uploadform.save(commit=False)
                 # Enforce the FILER_IS_PUBLIC_DEFAULT
                 file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
                 file_obj.save()
-                logger.info("[ajax_upload] file_obj saved - id=%s, type=%s, file.name=%s",
-                             file_obj.pk, type(file_obj).__name__, file_obj.file.name if file_obj.file else None)
 
                 clipboard_item = ClipboardItem(
                     clipboard=clipboard, file=file_obj)
                 clipboard_item.save()
-                logger.info("[ajax_upload] clipboard_item saved - id=%s", clipboard_item.pk)
 
                 json_response = {
                     'thumbnail': file_obj.icons['32'],
                     'alt_text': '',
                     'label': str(file_obj),
                 }
-                logger.info("[ajax_upload] SUCCESS response: %s", json_response)
                 return HttpResponse(json.dumps(json_response),
                                     content_type=mimetype)
             else:
@@ -182,10 +163,8 @@ class ClipboardAdmin(admin.ModelAdmin):
                     field,
                     ', '.join(errors)) for field, errors in list(uploadform.errors.items())
                 ])
-                logger.warning("[ajax_upload] form INVALID: %s", form_errors)
                 raise UploadException(self.messages['request-invalid'].format(form_errors))
         except UploadException as exception:
-            logger.warning("[ajax_upload] UploadException: %s", str(exception))
             return HttpResponse(json.dumps({'error': str(exception)}),
                                 content_type=mimetype)
         except Exception as error: # no matter the error, we don't return a 500 code
