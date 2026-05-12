@@ -29,11 +29,10 @@ setup(
     install_requires=(
         'django>=5.1,<5.2',
         'django-mptt>=0.6,<1.0',  # the exact version depends on Django
-        'django_polymorphic>=4.0.0',
-        'django-js-asset>=2.0.0',
+        'django_polymorphic>=4.0.0,<5.0',
+        'django-js-asset>=2.0.0,<3.0',
         'easy-thumbnails>=2,<3.0',
         'Unidecode>=0.04,<1.2',
-        'six',
         'filetype',
         'pytz',
     ),
