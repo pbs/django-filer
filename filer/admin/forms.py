@@ -18,8 +18,25 @@ class AsPWithHelpMixin(object):
         from django.utils.safestring import mark_safe
 
         output = []
+        # Render non-field errors (e.g. from Form.clean())
+        top_errors = self.non_field_errors()
+        if top_errors:
+            output.append(str(self.error_class(top_errors, renderer=self.renderer)))
+
+        hidden_fields = []
         for name in self.fields:
             bf = self[name]
+            # Collect hidden fields to render at the end
+            if bf.is_hidden:
+                if bf.errors:
+                    for error in bf.errors:
+                        output.append(
+                            '<ul class="errorlist"><li>(Hidden field %s) %s</li></ul>'
+                            % (name, conditional_escape(error))
+                        )
+                hidden_fields.append(str(bf))
+                continue
+
             bf_errors = self.error_class(bf.errors)
             if bf_errors:
                 output.append(str(bf_errors))
@@ -30,6 +47,11 @@ class AsPWithHelpMixin(object):
             output.append('<p%s>%s %s</p>' % (html_class_attr, label, field))
             if bf.help_text:
                 output.append('<p class="help">%s</p>' % conditional_escape(bf.help_text))
+
+        # Append hidden fields at the end
+        if hidden_fields:
+            output.append(''.join(hidden_fields))
+
         return mark_safe('\n'.join(output))
 
 
