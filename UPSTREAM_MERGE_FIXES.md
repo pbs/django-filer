@@ -26,10 +26,10 @@
 ### 1. `setup.py` — Build-time import error (GHA blocker)
 
 - **Problem:** `__import__('filer').__version__` can fail because Django may not be installed in the build environment
-- **Current PR state:** The `setup.py` changes described below are **not reflected in the current file**; `setup.py` still needs to be updated if we want this note to become true
-- **Pending follow-up:** Replace the import-based version lookup with a regex-based `get_version()` that reads `filer/__init__.py` without importing the package
-- **Pending follow-up:** Remove deprecated `setuptools.command.test` usage and the `test_suite`/`tests_require` metadata once `setup.py` is actually updated
-- **Note:** The earlier version of this document incorrectly described these changes as already applied
+- **Current PR state:** No `setup.py` remediation was merged in this PR; the file still imports the package for `__version__` and still retains the deprecated `setuptools.command.test` / `test_suite` / `tests_require` usage
+- **Not yet applied:** Replace the import-based version lookup with a regex-based `get_version()` that reads `filer/__init__.py` without importing the package
+- **Not yet applied:** Remove `cmdclass={'test': test}`, `test_suite`, and `tests_require` from `setup.py` when that file is updated in a future follow-up
+- **Note:** The earlier version of this document incorrectly described these changes as already applied; this section now documents them as outstanding work only
 
 ### 2. `filer/__init__.py` — version note
 
