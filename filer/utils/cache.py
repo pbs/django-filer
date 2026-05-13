@@ -7,11 +7,14 @@ files or folders are added, moved, deleted, restored, or modified.
 """
 import logging
 
+from django.conf import settings
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
-FOLDER_LISTING_CACHE_KEY = 'django_filer_rest.folder-listing:{site_id}:{folder_id}'
+DEFAULT_FOLDER_LISTING_CACHE_KEY = 'django_filer_rest.folder-listing:{site_id}:{folder_id}'
+FOLDER_LISTING_CACHE_KEY = getattr(
+    settings, 'FILER_FOLDER_LISTING_CACHE_KEY', DEFAULT_FOLDER_LISTING_CACHE_KEY)
 
 
 def invalidate_folder_listing_cache(folder):
