@@ -163,13 +163,16 @@ class File(PolymorphicModel,
     def matches_file_type(cls, iname, ifile, request):
         return True  # I match all files...
 
+    # Sentinel for fields whose previous value is unknown (deferred).
+    # Using a dedicated sentinel instead of substituting empty defaults
+    # prevents false positives in change-detection that could trigger
+    # unnecessary file copies/moves on storage.
+    _UNKNOWN = object()
+
     def __init__(self, *args, **kwargs):
         super(File, self).__init__(*args, **kwargs)
         # Use __dict__ to avoid triggering deferred field loading
         # which can cause recursion in Django 5.1+ (from_db calls __init__).
-        # Django stores the DEFERRED sentinel in __dict__ for deferred fields
-        # rather than omitting the key, so we must normalize it to a safe
-        # default to avoid false positives in change-detection comparisons.
         raw_is_public = self.__dict__.get('is_public', DEFERRED)
         if raw_is_public is DEFERRED:
             if self.pk is not None:
@@ -181,11 +184,11 @@ class File(PolymorphicModel,
         else:
             self._old_is_public = raw_is_public
         raw_sha1 = self.__dict__.get('sha1', DEFERRED)
-        self._old_sha1 = '' if raw_sha1 is DEFERRED else raw_sha1
+        self._old_sha1 = self._UNKNOWN if raw_sha1 is DEFERRED else raw_sha1
         self._force_commit = False
         # see method _is_path_changed
         raw_name = self.__dict__.get('name', DEFERRED)
-        self._old_name = '' if raw_name is DEFERRED else raw_name
+        self._old_name = self._UNKNOWN if raw_name is DEFERRED else raw_name
         # For FileField, the raw value in __dict__ is the file name string
         file_val = self.__dict__.get('file', '')
         if file_val is DEFERRED:
@@ -195,7 +198,7 @@ class File(PolymorphicModel,
         else:
             self._current_file_location = file_val or ''
         raw_folder_id = self.__dict__.get('folder_id', DEFERRED)
-        self._old_folder_id = None if raw_folder_id is DEFERRED else raw_folder_id
+        self._old_folder_id = self._UNKNOWN if raw_folder_id is DEFERRED else raw_folder_id
 
     def clean(self):
         if self.name:
@@ -334,7 +337,8 @@ class File(PolymorphicModel,
             self.generate_sha1()
         except (IOError, TypeError, ValueError) as e:
             pass
-        replaced_file = self._old_sha1 != self.sha1
+        replaced_file = (self._old_sha1 is not self._UNKNOWN and
+                         self._old_sha1 != self.sha1)
         # Track old folder for cache invalidation when file moves between folders
         old_folder_id = self._old_folder_id
         if filer_settings.FOLDER_AFFECTS_URL and (self._is_path_changed() or replaced_file):
@@ -348,7 +352,8 @@ class File(PolymorphicModel,
         invalidate_folder_listing_cache_for_file(self)
         # If file moved between folders, also invalidate the old folder
         new_folder_id = getattr(self.folder, 'id', None)
-        if old_folder_id and old_folder_id != new_folder_id:
+        if (old_folder_id is not self._UNKNOWN and
+                old_folder_id and old_folder_id != new_folder_id):
             try:
                 old_folder = filer.models.foldermodels.Folder.all_objects.get(
                     id=old_folder_id)
@@ -360,6 +365,8 @@ class File(PolymorphicModel,
 
     def _is_name_changed(self):
         """Check if the file name was explicitly changed by the user."""
+        if self._old_name is self._UNKNOWN:
+            return False  # can't determine change from deferred field
         if self._old_name in ('', None):
             return self.name not in ('', None)
         return self._old_name != self.name
@@ -371,6 +378,11 @@ class File(PolymorphicModel,
             the values will be reset after the file is copied in the
             destination location on storage.
         """
+        # If previous values are unknown (deferred), skip change-detection
+        # to avoid triggering unnecessary file copies/moves on storage.
+        if self._old_name is self._UNKNOWN or self._old_folder_id is self._UNKNOWN:
+            return False
+
         # check if file name changed
         if self._old_name in ('', None):
             name_changed = self.name not in ('', None)
