@@ -401,8 +401,9 @@ class File(PolymorphicModel,
             else:
                 # New file — save to the computed target location directly
                 target = self.file.field.upload_to(self, self.upload_to_name)
-                self.file.storage.save(target, self.file)
-                self._current_file_location = target
+                saved_target = self.file.storage.save(target, self.file)
+                self._current_file_location = saved_target
+                self.file.name = saved_target
             self._old_sha1 = self.sha1
         new_location = self.file.field.upload_to(self, self.upload_to_name)
         storage = self.file.storage
