@@ -38,8 +38,8 @@ setup(
     ),
     extras_require={
         's3': [
-            'boto3',
-            'django-storages',
+            'boto3>=1.26,<2.0',
+            'django-storages>=1.13,<2.0',
         ],
     },
     include_package_data=True,
