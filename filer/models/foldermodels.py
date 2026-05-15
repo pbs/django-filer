@@ -20,6 +20,7 @@ import mptt
 
 from .. import settings as filer_settings
 from ..cache import get_folder_permission_cache, update_folder_permission_cache
+from ..utils.cache import invalidate_folder_listing_cache
 from ..utils.cms_roles import (
     get_sites_for_user,
     get_sites_without_restriction_perm,
@@ -397,6 +398,7 @@ class Folder(models.Model, mixins.IconsMixin):
             self.set_metadata_from_parent()
             super().save(*args, **kwargs)
             self.update_descendants_metadata()
+            invalidate_folder_listing_cache(self)
             return
 
         storages = []
@@ -429,6 +431,7 @@ class Folder(models.Model, mixins.IconsMixin):
             raise
         else:
             delete_from_locations(old_locations, storages)
+        invalidate_folder_listing_cache(self)
 
     # PBS-specific: trash methods
     def soft_delete(self):
@@ -442,6 +445,8 @@ class Folder(models.Model, mixins.IconsMixin):
         Folder.objects.filter(
             id__in=desc_ids).update(deleted_at=deletion_time)
         self.deleted_at = deletion_time
+        # Invalidate cache for this folder and its parent
+        invalidate_folder_listing_cache(self)
 
     def hard_delete(self):
         desc_ids = list(self.get_descendants(
@@ -491,6 +496,8 @@ class Folder(models.Model, mixins.IconsMixin):
         for filer_file in files_qs:
             filer_file.restore()
         self.deleted_at = None
+        # Invalidate cache for this folder and its parent
+        invalidate_folder_listing_cache(self)
 
     @property
     def trashed_file_count(self):

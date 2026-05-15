@@ -21,6 +21,7 @@ from polymorphic.query import PolymorphicQuerySet
 
 from .. import settings as filer_settings
 from ..fields.multistorage_file import MultiStorageFileField
+from ..utils.cache import invalidate_folder_listing_cache, invalidate_folder_listing_cache_for_file
 from ..utils.cms_roles import (
     get_sites_without_restriction_perm,
     has_admin_role,
@@ -256,6 +257,12 @@ class File(PolymorphicModel, mixins.IconsMixin):
     def matches_file_type(cls, iname, ifile, request):
         return True  # I match all files...
 
+    # Sentinel for fields whose previous value is unknown (deferred).
+    # Using a dedicated sentinel instead of substituting empty defaults
+    # prevents false positives in change-detection that could trigger
+    # unnecessary file copies/moves on storage.
+    _UNKNOWN = object()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # PBS: Use __dict__ to avoid triggering deferred field loading
@@ -271,11 +278,11 @@ class File(PolymorphicModel, mixins.IconsMixin):
         else:
             self._old_is_public = raw_is_public
         raw_sha1 = self.__dict__.get('sha1', DEFERRED)
-        self._old_sha1 = '' if raw_sha1 is DEFERRED else raw_sha1
+        self._old_sha1 = self._UNKNOWN if raw_sha1 is DEFERRED else raw_sha1
         self._force_commit = False
         # see method _is_path_changed
         raw_name = self.__dict__.get('name', DEFERRED)
-        self._old_name = '' if raw_name is DEFERRED else raw_name
+        self._old_name = self._UNKNOWN if raw_name is DEFERRED else raw_name
         # For FileField, the raw value in __dict__ is the file name string
         file_val = self.__dict__.get('file', '')
         if file_val is DEFERRED:
@@ -285,7 +292,7 @@ class File(PolymorphicModel, mixins.IconsMixin):
         else:
             self._current_file_location = file_val or ''
         raw_folder_id = self.__dict__.get('folder_id', DEFERRED)
-        self._old_folder_id = None if raw_folder_id is DEFERRED else raw_folder_id
+        self._old_folder_id = self._UNKNOWN if raw_folder_id is DEFERRED else raw_folder_id
 
     @cached_property
     def mime_maintype(self):
@@ -448,7 +455,10 @@ class File(PolymorphicModel, mixins.IconsMixin):
             self.generate_sha1()
         except (IOError, TypeError, ValueError):
             pass
-        replaced_file = self._old_sha1 != self.sha1
+        replaced_file = (self._old_sha1 is not self._UNKNOWN and
+                         self._old_sha1 != self.sha1)
+        # Track old folder for cache invalidation when file moves between folders
+        old_folder_id = self._old_folder_id
         if filer_settings.FOLDER_AFFECTS_URL and (self._is_path_changed() or replaced_file):
             if replaced_file and not self._is_name_changed():
                 self.name = None
@@ -456,11 +466,25 @@ class File(PolymorphicModel, mixins.IconsMixin):
             self.update_location_on_storage(*args, **kwargs)
         else:
             super().save(*args, **kwargs)
+        # Invalidate cache for the current folder
+        invalidate_folder_listing_cache_for_file(self)
+        # If file moved between folders, also invalidate the old folder
+        new_folder_id = getattr(self.folder, 'id', None)
+        if (old_folder_id is not self._UNKNOWN and
+                old_folder_id and old_folder_id != new_folder_id):
+            try:
+                old_folder = filer.models.foldermodels.Folder.all_objects.get(
+                    id=old_folder_id)
+                invalidate_folder_listing_cache(old_folder)
+            except filer.models.foldermodels.Folder.DoesNotExist:
+                pass
 
     save.alters_data = True
 
     def _is_name_changed(self):
         """Check if the file name was explicitly changed by the user."""
+        if self._old_name is self._UNKNOWN:
+            return False  # can't determine change from deferred field
         if self._old_name in ('', None):
             return self.name not in ('', None)
         return self._old_name != self.name
@@ -469,6 +493,12 @@ class File(PolymorphicModel, mixins.IconsMixin):
         """
         Used to detect if file location on storage should be updated or not.
         """
+        # If previous values are unknown (deferred), skip change-detection
+        # to avoid triggering unnecessary file copies/moves on storage.
+        if self._old_name is self._UNKNOWN or self._old_folder_id is self._UNKNOWN:
+            return False
+
+        # check if file name changed
         if self._old_name in ('', None):
             name_changed = self.name not in ('', None)
         else:
@@ -487,7 +517,16 @@ class File(PolymorphicModel, mixins.IconsMixin):
         old_location = self._current_file_location
         self._delete_thumbnails()
         if self._old_sha1 != self.sha1:
-            self.file.storage.save(self._current_file_location, self.file)
+            # actual file content needs to be replaced on storage prior to
+            #   filer file instance save
+            if self._current_file_location:
+                self.file.storage.save(self._current_file_location, self.file)
+            else:
+                # New file — save to the computed target location directly
+                target = self.file.field.upload_to(self, self.upload_to_name)
+                saved_target = self.file.storage.save(target, self.file)
+                self._current_file_location = saved_target
+                self.file.name = saved_target
             self._old_sha1 = self.sha1
         new_location = self.file.field.upload_to(self, self.upload_to_name)
         storage = self.file.storage
@@ -504,11 +543,13 @@ class File(PolymorphicModel, mixins.IconsMixin):
                 with transaction.atomic(savepoint=False):
                     copy_and_save()
             except:
-                if old_location != new_location:
+                # delete the file from new_location if the db update failed
+                if old_location and old_location != new_location:
                     storage.delete(new_location)
                 raise
             else:
-                if old_location != new_location:
+                # only delete the file on the old_location if all went OK
+                if old_location and old_location != new_location:
                     storage.delete(old_location)
         else:
             copy_and_save()
@@ -539,6 +580,8 @@ class File(PolymorphicModel, mixins.IconsMixin):
                 deleted_at=deletion_time, file=new_location)
             self.deleted_at = deletion_time
             self.file = new_location
+        # Invalidate cache for the folder this file was in
+        invalidate_folder_listing_cache_for_file(self)
 
     def hard_delete(self, *args, **kwargs):
         """
@@ -619,6 +662,8 @@ class File(PolymorphicModel, mixins.IconsMixin):
                     clipboard.append_file(File.objects.get(id=self.id))
                 except auth_models.User.DoesNotExist:
                     pass
+        # Invalidate cache for the folder this file was restored to
+        invalidate_folder_listing_cache_for_file(self)
 
     def __str__(self):
         try:
