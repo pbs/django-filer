@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && \
 
 # Copy the full source and install
 COPY . .
-RUN pip install --no-cache-dir pytest pytest-django filetype pytz "Django==4.2.*" && \
+RUN pip install --no-cache-dir pytest pytest-django filetype pytz "Django>=5.1,<5.2" && \
     pip install --no-cache-dir -e .
 
 

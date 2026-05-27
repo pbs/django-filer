@@ -40,7 +40,21 @@ FILER_FILE_MODELS = getattr(settings, 'FILER_FILE_MODELS',
     )
 )
 
-DEFAULT_FILE_STORAGE = getattr(settings, 'DEFAULT_FILE_STORAGE', 'django.core.files.storage.FileSystemStorage')
+_FALLBACK_STORAGE_BACKEND = 'django.core.files.storage.FileSystemStorage'
+
+if hasattr(settings, "STORAGES") and 'default' in settings.STORAGES:
+    DEFAULT_FILE_STORAGE = settings.STORAGES['default'].get('BACKEND', _FALLBACK_STORAGE_BACKEND)
+else:
+    DEFAULT_FILE_STORAGE = getattr(settings, 'DEFAULT_FILE_STORAGE', _FALLBACK_STORAGE_BACKEND)
+    # Django 5.1+ removed the legacy DEFAULT_FILE_STORAGE setting and relies
+    # exclusively on STORAGES['default'].  If the host project (e.g. bento)
+    # defines STORAGES without a 'default' key, Django's internal
+    # default_storage lookup will raise InvalidStorageError.  Inject the
+    # entry so the rest of the framework keeps working.
+    if hasattr(settings, "STORAGES"):
+        settings.STORAGES['default'] = {
+            'BACKEND': DEFAULT_FILE_STORAGE,
+        }
 
 MINIMAL_FILER_STORAGES = {
     'public': {

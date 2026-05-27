@@ -1,15 +1,14 @@
 #-*- coding: utf-8 -*-
 import os
-import tempfile
+import unittest
 import zipfile
 import io
 import json
-import unittest
 from django.test import TestCase
 from django.urls import reverse
 from django.core.exceptions import ValidationError
 from django.core import files as dj_files
-from django.contrib.admin import helpers, site
+from django.contrib.admin import helpers
 from django.contrib.sites.models import Site
 from django.contrib.auth.models import User, Group, Permission
 from django.http import HttpRequest
@@ -23,7 +22,7 @@ from filer.models.virtualitems import FolderRoot
 from filer.models import tools
 from filer.tests.helpers import (
     get_user_message, create_superuser, create_folder_structure,
-    create_image, create_staffuser, create_folder_for_user, move_action,
+    create_image, move_action,
     move_to_clipboard_action, paste_clipboard_to_folder, get_dir_listing_url,
     filer_obj_as_checkox, get_make_root_folder_url, enable_restriction,
     move_single_file_to_clipboard_action, SettingsOverride
@@ -393,8 +392,7 @@ class BulkOperationsMixin(object):
 
     def create_file(self, folder, filename=None):
         filename = filename or 'test_file.dat'
-        file_data = dj_files.base.ContentFile('some data')
-        file_data.name = filename
+        file_data = dj_files.base.ContentFile(b'some data', name=filename)
         file_obj = File.objects.create(owner=self.superuser,
             original_filename=filename, file=file_data, folder=folder)
         file_obj.save()
@@ -431,10 +429,10 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         bar = Folder.objects.create(name='bar', site=Site.objects.get(id=1))
         file_foo = File.objects.create(
             original_filename='file', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         file_bar = File.objects.create(
             original_filename='file', folder=bar,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
 
         response, url = move_action(
             self.client, foo, bar, [file_foo], follow=True)
@@ -844,7 +842,7 @@ class BaseTestFolderTypePermissionLayer(object):
 
         file_bar = File.objects.create(
             original_filename='bar_file', folder=bar,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         _files['file_bar'] = file_bar
         return _folders, _files
 
@@ -875,7 +873,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_to_clipboard_from_root(self):
         file_foo = File.objects.create(
             original_filename='foo', folder=None,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -885,7 +883,7 @@ class BaseTestFolderTypePermissionLayer(object):
 
         file_bar = File.objects.create(
             original_filename='bar', folder=None,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_single_file_to_clipboard_action(
             self.client, 'unfiled', [file_bar])
         self.assertEqual(
@@ -895,7 +893,7 @@ class BaseTestFolderTypePermissionLayer(object):
         foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
         file_foo = File.objects.create(
             original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -905,14 +903,14 @@ class BaseTestFolderTypePermissionLayer(object):
 
         file_bar = File.objects.create(
             original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_to_clipboard_action(self.client, foo, [file_bar])
         self.assertEqual(
             self._get_clipboard_files().count(), 1)
 
         file_baz = File.objects.create(
             original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_single_file_to_clipboard_action(
             self.client, foo, [file_baz])
         self.assertEqual(
@@ -923,7 +921,7 @@ class BaseTestFolderTypePermissionLayer(object):
                                     folder_type=Folder.CORE_FOLDER)
         file_foo = File.objects.create(
             original_filename='foo_file', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
         response, _ = move_to_clipboard_action(self.client, None, [foo])
@@ -942,7 +940,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_clipboard_to_root(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         clipboard, _ = Clipboard.objects.get_or_create(
             user=self.user)
         clipboard.append_file(bar_file)
@@ -957,7 +955,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_clipboard_to_core_folders(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         core_folder = Folder.objects.create(
             name='foo', folder_type=Folder.CORE_FOLDER)
         clipboard, _ = Clipboard.objects.get_or_create(
@@ -974,7 +972,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_clipboard_to_site_folders(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         site_folder = Folder.objects.create(
             name='foo', site=Site.objects.get(id=1))
         clipboard, _ = Clipboard.objects.get_or_create(
@@ -1051,7 +1049,7 @@ class BaseTestFolderTypePermissionLayer(object):
             parent=foo, name='selected', site=Site.objects.get(id=1))
         file_in_selected = File.objects.create(
             folder=selected, original_filename='file_in_selected',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         valid_destination = Folder.objects.create(
             parent=foo, name='valid', site=Site.objects.get(id=1))
 
@@ -1077,7 +1075,7 @@ class BaseTestFolderTypePermissionLayer(object):
     def test_move_from_unfiled(self):
         foo_file = File.objects.create(
             original_filename='foo_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         bar = Folder.objects.create(
             name='bar', site=Site.objects.get(id=1))
         response, url = move_action(self.client, 'unfiled', bar, [foo_file])
@@ -1107,7 +1105,7 @@ class BaseTestFolderTypePermissionLayer(object):
         f1 = Folder.objects.create(name='foo', folder_type=Folder.CORE_FOLDER)
         file1 = File.objects.create(
             original_filename='bar_file', folder=f1,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         url = reverse('admin:filer_file_change', args=(file1.id, ))
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -1126,7 +1124,7 @@ class BaseTestFolderTypePermissionLayer(object):
         f1 = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
         file1 = File.objects.create(
             original_filename='bar_file', folder=f1,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         url = reverse('admin:filer_file_change', args=(file1.id, ))
         response = self.client.get(url)
         self.assertIn('submit-row', response.content.decode())
@@ -1142,13 +1140,13 @@ class BaseTestFolderTypePermissionLayer(object):
             name='bar', site=Site.objects.get(id=1))
         file_structure['foo_file'] = Archive.objects.create(
             original_filename='foo_file.zip', folder=file_structure['foo'],
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         file_structure['bar_file'] = Archive.objects.create(
             original_filename='bar_file.zip', folder=file_structure['bar'],
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         file_structure['baz_file'] = Archive.objects.create(
             original_filename='baz_file.zip',
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         return file_structure
 
     def test_extract_files_in_core_folder(self):
@@ -1328,7 +1326,7 @@ class TestFolderTypePermissionLayerForRegularUser(
         foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
         file_foo = File.objects.create(
             original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         self.assertEqual(
             self._get_clipboard_files().count(), 0)
 
@@ -1338,14 +1336,14 @@ class TestFolderTypePermissionLayerForRegularUser(
 
         file_bar = File.objects.create(
             original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_to_clipboard_action(self.client, foo, [file_bar])
         self.assertEqual(
             self._get_clipboard_files().count(), 1)
 
         file_baz = File.objects.create(
             original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         move_single_file_to_clipboard_action(
             self.client, foo, [file_baz])
         self.assertEqual(
@@ -1405,20 +1403,20 @@ class TestSiteFolderRoleFiltering(TestCase, HelpersMixin):
 
     def _build_folder_structure(self):
         unfiled_file = File.objects.create(original_filename='unfiled_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         foo = Folder.objects.create(name='foo', site=self.foo_site)
         foo_file = File.objects.create(original_filename='foo_file',
-            file=dj_files.base.ContentFile('some data'), folder=foo)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=foo)
         bar = Folder.objects.create(name='bar', site=self.bar_site)
         bar_file = File.objects.create(original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
         none = Folder.objects.create(name='no_site')
         none_file = File.objects.create(original_filename='none_file',
-            file=dj_files.base.ContentFile('some data'), folder=none)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=none)
         core = Folder.objects.create(
             name='core', folder_type=Folder.CORE_FOLDER)
         core_file = File.objects.create(original_filename='core_file',
-            file=dj_files.base.ContentFile('some data'), folder=core)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=core)
 
         return {'foo': foo, 'bar': bar, 'none': none, 'core': core}, {
             'foo_file': foo_file,
@@ -1718,13 +1716,13 @@ class TestValidationOnFileName(TestCase):
         return [
             Archive.objects.create(
                 original_filename='zippy.zip',
-                file=dj_files.base.ContentFile('zippy')),
+                file=dj_files.base.ContentFile(b'zippy', name='data.zip')),
             Image.objects.create(
                 original_filename='image.jpg',
-                file=dj_files.base.ContentFile('image')),
+                file=dj_files.base.ContentFile(b'image', name='image.bin')),
             File.objects.create(
                 original_filename='file.txt',
-                file=dj_files.base.ContentFile('file'))]
+                file=dj_files.base.ContentFile(b'file', name='file.bin'))]
 
     def test_name_with_slash(self):
         files = self._make_file_for_each_type()
@@ -1904,7 +1902,7 @@ class TestFrozenAssetsPermissions(TestCase):
         foo_file = Image.objects.create(original_filename=self.image_name,
             file=file_obj, folder=foo)
         foo_zippy = Archive.objects.create(original_filename='foo_file.zip',
-            file=dj_files.base.ContentFile('zippy'), folder=foo)
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'), folder=foo)
         assert foo.restricted == foo_file.restricted
         return {'foo': foo}, {'foo_file': foo_file, 'foo_zippy': foo_zippy}
 
@@ -1922,7 +1920,7 @@ class TestFrozenAssetsPermissions(TestCase):
     def test_move_from_clipboard_in_restricted(self):
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'))
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
         clipboard, _ = Clipboard.objects.get_or_create(user=self.user)
         clipboard.append_file(bar_file)
         response = paste_clipboard_to_folder(
@@ -1957,7 +1955,7 @@ class TestFrozenAssetsPermissions(TestCase):
             name='bar', site=self.site)
         bar_file = File.objects.create(
             original_filename='bar_file', restricted=True,
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
         response = move_single_file_to_clipboard_action(
             self.client, bar, [bar_file])
         self.assertEqual(response.status_code, 403)
@@ -1968,7 +1966,7 @@ class TestFrozenAssetsPermissions(TestCase):
             name='bar1', site=self.site, parent=bar)
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
         response, _ = move_action(
             self.client, bar, self.folders['foo'], [bar_file])
         self.assert_invalid_move_destination_response(response)
@@ -2044,7 +2042,7 @@ class TestFrozenAssetsPermissions(TestCase):
         bar = Folder.objects.create(name='bar', site=self.site)
         bar_file = File.objects.create(
             original_filename='bar_file', restricted=True,
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
 
         url = get_dir_listing_url(bar)
         response = self.client.post(url, {
@@ -2072,7 +2070,7 @@ class TestFrozenAssetsPermissions(TestCase):
         bar = Folder.objects.create(name='bar', site=self.site)
         bar_file = File.objects.create(
             original_filename='bar_file',
-            file=dj_files.base.ContentFile('some data'), folder=bar)
+            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
 
         url = get_dir_listing_url(bar)
         response = self.client.post(url, {
@@ -2150,7 +2148,7 @@ class TestSharedSitePermissions(TestCase):
     def test_view_shared_folder(self):
         bar_file = File.objects.create(
             original_filename='bar_file.txt', folder=self.bar,
-            file=dj_files.base.ContentFile('file'))
+            file=dj_files.base.ContentFile(b'file', name='file.bin'))
         resp, items = self.get_listed_objects(None)
         self.assertEqual(set([self.foo, self.bar]), set(items))
         resp, items = self.get_listed_objects(self.bar)
@@ -2214,7 +2212,7 @@ class TestSharedSitePermissions(TestCase):
     def test_move_to_shared_folder(self):
         unfiled_file = File.objects.create(
             original_filename='bar_file.txt',
-            file=dj_files.base.ContentFile('file'))
+            file=dj_files.base.ContentFile(b'file', name='file.bin'))
         response, _ = move_action(
             self.client, 'unfiled', self.bar, [unfiled_file])
         self.assertEqual(File.objects.get(id=unfiled_file.id).folder, None)
@@ -2225,7 +2223,7 @@ class TestSharedSitePermissions(TestCase):
     def test_extract_files_shared_folder(self):
         bar_zippy = Archive.objects.create(
             original_filename='bar_zippy.zip', folder=self.bar,
-            file=dj_files.base.ContentFile('zippy'))
+            file=dj_files.base.ContentFile(b'zippy', name='data.zip'))
         assert Folder.objects.get(id=self.bar.id).files.count() == 1
         url = get_dir_listing_url(self.bar)
         response = self.client.post(url, {
@@ -2237,7 +2235,7 @@ class TestSharedSitePermissions(TestCase):
     def test_move_to_clipboard_from_shared_folder(self):
         bar_file = File.objects.create(
             original_filename='bar_file.txt', folder=self.bar,
-            file=dj_files.base.ContentFile('file'))
+            file=dj_files.base.ContentFile(b'file', name='file.bin'))
         response = move_to_clipboard_action(
             self.client, self.bar, [bar_file])
         self.assertEqual(Clipboard.objects.all().get().files.count(), 0)

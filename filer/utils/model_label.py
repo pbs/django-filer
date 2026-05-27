@@ -1,5 +1,3 @@
-import six
-
 def get_model_label(model):
     """
     Take a model class or model label and return its model label.
@@ -8,7 +6,7 @@ def get_model_label(model):
     >>> get_model_label("myapp.MyModel")
     "myapp.MyModel"
     """
-    if isinstance(model, six.string_types):
+    if isinstance(model, str):
         return model
     else:
         return "%s.%s" % (

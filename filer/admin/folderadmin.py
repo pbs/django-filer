@@ -161,7 +161,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
     def icon_img(self, xs):
         return mark_safe(('<img src="%simg/icons/plainfolder_32x32.png" ' +
                           'alt="Folder Icon" />') % FILER_STATICMEDIA_PREFIX)
-    icon_img.allow_tags = True
 
     def get_urls(self):
         urls = super(FolderAdmin, self).get_urls()
@@ -1302,7 +1301,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
         # Display the rename format selection page
         return render(request, "admin/filer/folder/choose_rename_format.html", context=context)
 
-    rename_files.short_description = ugettext_lazy("Rename files")
+    rename_files.short_description = gettext_lazy("Rename files")
 
     def _list_folders_to_resize(self, request, folders):
         for fo in folders:
@@ -1435,9 +1434,13 @@ class FolderAdmin(FolderPermissionModelAdmin):
         }
 
         # Display the resize options page
-        return render("admin/filer/folder/choose_images_resize_options.html", context=context)
+        return render(
+            request,
+            "admin/filer/folder/choose_images_resize_options.html",
+            context=context,
+        )
 
-    resize_images.short_description = ugettext_lazy("Resize selected images")
+    resize_images.short_description = gettext_lazy("Resize selected images")
 
     def files_set_public_or_private(self, request, set_public,
                                     files_queryset, folders_queryset):
@@ -1487,13 +1490,13 @@ class FolderAdmin(FolderPermissionModelAdmin):
         return self.files_set_public_or_private(
             request, False, files_queryset, folders_queryset)
 
-    files_set_private.short_description = ugettext_lazy(
+    files_set_private.short_description = gettext_lazy(
         "Enable permissions for selected files")
 
     def files_set_public(self, request, files_queryset, folders_queryset):
         return self.files_set_public_or_private(
             request, True, files_queryset, folders_queryset)
 
-    files_set_public.short_description = ugettext_lazy(
+    files_set_public.short_description = gettext_lazy(
         "Disable permissions for selected files")
 '''

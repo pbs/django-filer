@@ -1,10 +1,8 @@
 #-*- coding: utf-8 -*-
 from django import forms
-from django.conf import settings as globalsettings
 from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.contrib.admin import widgets as django_widgets
 from django.contrib.admin.sites import site
-from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse
 from django.db import models
 from django.template.loader import render_to_string

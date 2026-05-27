@@ -1,8 +1,8 @@
 #-*- coding: utf-8 -*-
-from django.urls import include, re_path
+from django.urls import path, include
 from django.contrib import admin
 
 urlpatterns = [
-    re_path(r'^admin/', admin.site.urls),
-    re_path(r'^', include('filer.server.urls'))
+    path('admin/', admin.site.urls),
+    path('', include('filer.server.urls'))
 ]

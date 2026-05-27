@@ -13,13 +13,46 @@ if 'cmsplugin_filer_image' in settings.INSTALLED_APPS:
 
 class AsPWithHelpMixin(object):
     def as_p_with_help(self):
-        "Returns this form rendered as HTML <p>s with help text formated for admin."
-        return self._html_output(
-            normal_row='<p%(html_class_attr)s>%(label)s %(field)s</p>%(help_text)s',
-            error_row='%s',
-            row_ender='</p>',
-            help_text_html='<p class="help">%s</p>',
-            errors_on_separate_row=True)
+        "Returns this form rendered as HTML <p>s with help text formatted for admin."
+        from django.utils.html import conditional_escape
+        from django.utils.safestring import mark_safe
+
+        output = []
+        # Render non-field errors (e.g. from Form.clean())
+        top_errors = self.non_field_errors()
+        if top_errors:
+            output.append(str(self.error_class(top_errors, renderer=self.renderer)))
+
+        hidden_fields = []
+        for name in self.fields:
+            bf = self[name]
+            # Collect hidden fields to render at the end
+            if bf.is_hidden:
+                if bf.errors:
+                    for error in bf.errors:
+                        output.append(
+                            '<ul class="errorlist"><li>(Hidden field %s) %s</li></ul>'
+                            % (name, conditional_escape(error))
+                        )
+                hidden_fields.append(str(bf))
+                continue
+
+            bf_errors = self.error_class(bf.errors)
+            if bf_errors:
+                output.append(str(bf_errors))
+            css_classes = bf.css_classes()
+            html_class_attr = ' class="%s"' % css_classes if css_classes else ''
+            label = bf.label_tag() or ''
+            field = str(bf)
+            output.append('<p%s>%s %s</p>' % (html_class_attr, label, field))
+            if bf.help_text:
+                output.append('<p class="help">%s</p>' % conditional_escape(bf.help_text))
+
+        # Append hidden fields at the end
+        if hidden_fields:
+            output.append(''.join(hidden_fields))
+
+        return mark_safe('\n'.join(output))
 
 
 class CopyFilesAndFoldersForm(forms.Form, AsPWithHelpMixin):

@@ -156,8 +156,7 @@ class Archive(File):
 
     def _create_file(self, basename, folder, data):
         """Helper wrapper of creating a filer file."""
-        file_data = ContentFile(data)
-        file_data.name = basename
+        file_data = ContentFile(data, name=basename)
         matched_file_types = matching_file_subtypes(basename, None, None)
         FileSubClass = matched_file_types[0]
         if (FileSubClass is FilerImage and

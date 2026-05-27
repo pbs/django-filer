@@ -3,7 +3,6 @@ from django.forms.models import modelform_factory
 from django.core.exceptions import PermissionDenied
 from django.contrib import admin
 from django.http import HttpResponse, HttpResponseRedirect
-from django.utils.translation import gettext as _
 from django.views.decorators.csrf import csrf_exempt
 from django.urls import re_path
 from filer import settings as filer_settings
@@ -17,8 +16,10 @@ from filer.views import (
 )
 from filer.admin.tools import is_valid_destination
 from filer.utils.is_ajax import is_ajax
-import os
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 # even though the CharField is limited at 255 characters, the filename is used in
 # thumbnail creation, which remembers the path and also post-fixes the name with
@@ -121,14 +122,18 @@ class ClipboardAdmin(admin.ModelAdmin):
         upload, file_obj, clipboard_item = None, None, None
         try:
             upload, original_filename, _ = handle_upload(request)
+
             filename = truncate_filename(upload, maxlen=FILENAME_LIMIT)
             upload.name = filename # the upload raw has also the title saved in a CharField
 
             # Get clipboad
-            clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
+            clipboard, created = Clipboard.objects.get_or_create(user=request.user)
+
             if any(f for f in clipboard.files.all() if f.original_filename == filename):
                 raise UploadException(self.messages['already-exists'].format(filename))
+
             matched_file_types = matching_file_subtypes(filename, upload, request)
+
             FileForm = modelform_factory(
                 model=matched_file_types[0],
                 fields=('original_filename', 'owner', 'file')
@@ -141,9 +146,11 @@ class ClipboardAdmin(admin.ModelAdmin):
                 # Enforce the FILER_IS_PUBLIC_DEFAULT
                 file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
                 file_obj.save()
+
                 clipboard_item = ClipboardItem(
                     clipboard=clipboard, file=file_obj)
                 clipboard_item.save()
+
                 json_response = {
                     'thumbnail': file_obj.icons['32'],
                     'alt_text': '',
@@ -161,6 +168,7 @@ class ClipboardAdmin(admin.ModelAdmin):
             return HttpResponse(json.dumps({'error': str(exception)}),
                                 content_type=mimetype)
         except Exception as error: # no matter the error, we don't return a 500 code
+            logger.exception("[ajax_upload] Unexpected error: %s", str(error))
             # an error occurred trying to build the file obj and the clipboard item
             # since they are interconnected, we'll delete both to cleanup
             if clipboard_item:

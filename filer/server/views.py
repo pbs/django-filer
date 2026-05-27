@@ -1,6 +1,4 @@
 #-*- coding: utf-8 -*-
-from django.conf import settings
-from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from easy_thumbnails.files import ThumbnailFile
 from filer import settings as filer_settings

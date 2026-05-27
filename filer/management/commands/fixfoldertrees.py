@@ -1,6 +1,5 @@
 from django.core.management.base import BaseCommand
 from filer.utils.checktrees import TreeChecker, TreeCorruption
-from optparse import make_option
 
 
 class Command(BaseCommand):

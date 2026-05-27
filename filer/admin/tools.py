@@ -1,6 +1,5 @@
 #-*- coding: utf-8 -*-
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from filer.utils.cms_roles import *
 from filer.models.foldermodels import Folder
