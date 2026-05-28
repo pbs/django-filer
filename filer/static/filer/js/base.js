@@ -7,6 +7,17 @@ import Mediator from 'mediator-js/lib/mediator';
 import FocalPoint from './addons/focal-point';
 import Toggler from './addons/toggler';
 
+// Import self-initializing addons so they are included in the bundle
+import './addons/dropdown-menu';
+import './addons/upload-button';
+import './addons/dropzone.init';
+import './addons/table-dropzone';
+import './addons/copy-move-files';
+import './addons/tooltip';
+import './addons/widget';
+import './addons/popup_handling';
+import './addons/filer_popup_response';
+
 window.Cl = window.Cl || {};
 Cl.mediator = new Mediator();  // mediator init
 Cl.FocalPoint = FocalPoint;
