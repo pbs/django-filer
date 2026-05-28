@@ -11,4 +11,4 @@ Release logic:
  7. Create a new release on github.
 """
 
-__version__ = '3.4.4'
+__version__ = '3.4.4+bento3.patch.1'
