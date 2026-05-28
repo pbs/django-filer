@@ -1,4 +1,5 @@
 import itertools
+import logging
 import os
 import re
 from collections import OrderedDict
@@ -53,8 +54,7 @@ from .tools import (
 
 Image = load_model(FILER_IMAGE_MODEL)
 
-
-class AddFolderPopupForm(forms.ModelForm):
+logger = logging.getLogger(__name__)class AddFolderPopupForm(forms.ModelForm):
     folder = forms.HiddenInput()
 
     class Meta:
@@ -412,19 +412,37 @@ class FolderAdmin(FolderPermissionModelAdmin):
         limit_search_to_folder = request.GET.get('limit_search_to_folder',
                                                  False) in (True, 'on')
 
+        logger.debug(
+            "[Filer Search] query=%r, search_terms=%r, search_mode=%s, "
+            "limit_search_to_folder=%s, folder=%s (id=%s, is_root=%s)",
+            q, search_terms, search_mode, limit_search_to_folder,
+            folder.name if folder else None,
+            folder.pk if folder else None,
+            folder.is_root if folder else None,
+        )
+
         if len(search_terms) > 0:
             if folder and limit_search_to_folder and not folder.is_root:
                 desc_folder_ids = folder.get_descendants_ids()
+                logger.debug(
+                    "[Filer Search] Limiting to folder %s and %d descendant folders",
+                    folder.name, len(desc_folder_ids),
+                )
                 # Do not include current folder itself in search results.
                 folder_qs = Folder.objects.filter(pk__in=desc_folder_ids)
                 # Limit search results to files in the current folder or any
                 # nested folder.
                 file_qs = File.objects.filter(folder_id__in=desc_folder_ids + [folder.pk])
             else:
+                logger.debug("[Filer Search] Searching globally (all folders and files)")
                 folder_qs = self.get_queryset(request)
                 file_qs = File.objects.all()
             folder_qs = self.filter_folder(folder_qs, search_terms).prefetch_related("children", "all_files")
             file_qs = self.filter_file(file_qs, search_terms)
+            logger.debug(
+                "[Filer Search] Results: %d folders, %d files found for terms=%r",
+                folder_qs.count(), file_qs.count(), search_terms,
+            )
 
             show_result_count = True
         else:
@@ -613,6 +631,10 @@ class FolderAdmin(FolderPermissionModelAdmin):
             else:
                 return "%s__icontains" % field_name
 
+        logger.debug(
+            "[Filer Search] filter_folder: terms=%r, search_fields=%r, owner_lookups=%r",
+            terms, self.search_fields, self.get_owner_filter_lookups(),
+        )
         for term in terms:
             filters = models.Q()
             for filter_ in self.search_fields:
@@ -620,9 +642,11 @@ class FolderAdmin(FolderPermissionModelAdmin):
             for filter_ in self.get_owner_filter_lookups():
                 filters |= models.Q(**{filter_: term})
             qs = qs.filter(filters)
+        logger.debug("[Filer Search] filter_folder query: %s", qs.query)
         return qs
 
     def filter_file(self, qs, terms=()):
+        logger.debug("[Filer Search] filter_file: terms=%r", terms)
         for term in terms:
             filters = (models.Q(name__icontains=term)
                        | models.Q(description__icontains=term)
@@ -630,6 +654,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
             for filter_ in self.get_owner_filter_lookups():
                 filters |= models.Q(**{filter_: term})
             qs = qs.filter(filters)
+        logger.debug("[Filer Search] filter_file query: %s", qs.query)
         return qs
 
     @property
