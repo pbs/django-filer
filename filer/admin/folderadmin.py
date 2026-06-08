@@ -54,7 +54,9 @@ from .tools import (
 
 Image = load_model(FILER_IMAGE_MODEL)
 
-logger = logging.getLogger(__name__)class AddFolderPopupForm(forms.ModelForm):
+logger = logging.getLogger(__name__)
+
+class AddFolderPopupForm(forms.ModelForm):
     folder = forms.HiddenInput()
 
     class Meta:
