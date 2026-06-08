@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             paramName: 'file',
             maxFiles: 1,
             maxFilesize: dropzone.dataset.maxFilesize,
-            previewTemplate: document.querySelector(dropzoneTemplate).innerHTML || '',
+            previewTemplate: document.querySelector(dropzoneTemplate)?.innerHTML || '<div></div>',
             clickable: false,
             addRemoveLinks: false,
             init: function () {

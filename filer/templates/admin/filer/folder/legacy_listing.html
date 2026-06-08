@@ -70,7 +70,9 @@
     {% endif %}
 {% endblock %}
 
-{% block sidebar %}{% endblock %}
+{% block sidebar %}
+    {% include "admin/filer/tools/clipboard/clipboard.html" %}
+{% endblock %}
 
 {% block content_title %}
     <h2>&nbsp;</h2>
