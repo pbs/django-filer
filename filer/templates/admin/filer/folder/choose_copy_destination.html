@@ -1,5 +1,5 @@
-{% extends "admin/base_site.html" %}
-{% load i18n static %}
+{% extends "admin/filer/base_site.html" %}
+{% load i18n static filer_admin_tags %}
 
 {% block breadcrumbs %}
     {% include "admin/filer/breadcrumbs.html" %}
@@ -14,8 +14,6 @@
 {% block extrahead %}
     {{ block.super }}
     <script src="{% static 'admin/js/cancel.js' %}" async></script>
-    <script src="{% static 'filer/js/addons/tooltip.js' %}"></script>
-    <script src="{% static 'filer/js/addons/copy-move-files.js' %}"></script>
 {% endblock %}
 
 {% block content %}
@@ -25,52 +23,36 @@
             <a href="#" class="button cancel-link js-history-back">{% translate "Take me back" %}</a>
         </div>
     {% else %}
-        {% if not destination_folders %}
-            <p>{% blocktrans %}There are no destination folders available.{% endblocktrans %}</p>
+        {% if not to_copy %}
+            <p>{% blocktrans %}There are no files and/or folders available to copy.{% endblocktrans %}</p>
             <div class="text-right clearfix">
-                <a href="#" class="button cancel-link js-history-back">{% translate "Take me back" %}</a>
+                <a href="#" class="button cancel-link">{% translate "Take me back" %}</a>
             </div>
         {% else %}
-            {% if not to_copy %}
-                <p>{% blocktrans %}There are no files and/or folders available to copy.{% endblocktrans %}</p>
-                <div class="text-right clearfix">
-                    <a href="#" class="button cancel-link">{% translate "Take me back" %}</a>
-                </div>
-            {% else %}
-                <p>{% blocktrans %}The following files and/or folders will be copied to a destination folder (retaining their tree structure):{% endblocktrans %}</p>
-                <ul>{{ to_copy|unordered_list }}</ul>
-                <form action="" method="post">
-                    {% csrf_token %}
-                    <div>
-                        {% for f in files_queryset %}
-                            <input type="hidden" name="{{ action_checkbox_name }}" value="file-{{ f.pk|safe }}">
-                        {% endfor %}
-                        {% for f in folders_queryset %}
-                            <input type="hidden" name="{{ action_checkbox_name }}" value="folder-{{ f.pk|safe }}">
-                        {% endfor %}
-                        <input type="hidden" name="action" value="copy_files_and_folders">
-                        <input type="hidden" name="post" value="yes">
-                        <p>
-                            <label for="destination">{% blocktrans %}Destination folder:{% endblocktrans %}</label>
-                            <select name="destination" id="destination">
-                                {% for folder, name_and_enabled in destination_folders %}
-                                    <option value="{{ folder.pk|safe }}"{% if not name_and_enabled.1 %} disabled="disabled"{% endif %}{% if selected_destination_folder and folder.pk == selected_destination_folder %} selected="selected"{% endif %}>{{ name_and_enabled.0 }}</option>
-                                {% endfor %}
-                            </select>
-                        </p>
-                        {{ copy_form.as_p }}
+            <p>{% blocktrans %}The following files and/or folders will be copied to a destination folder (retaining their tree structure):{% endblocktrans %}</p>
+            <ul>{{ to_copy|unordered_list }}</ul>
+            <form action="" method="post">
+                {% csrf_token %}
+                <div>
+                    {% for f in files_queryset %}
+                        <input type="hidden" name="{{ action_checkbox_name }}" value="file-{{ f.pk|safe }}">
+                    {% endfor %}
+                    {% for f in folders_queryset %}
+                        <input type="hidden" name="{{ action_checkbox_name }}" value="folder-{{ f.pk|safe }}">
+                    {% endfor %}
+                    <input type="hidden" name="action" value="copy_files_and_folders">
+                    <input type="hidden" name="post" value="yes">
 
-                        <div class="submit-row text-right clearfix">
-                            <a href="#" class="button cancel-link">{% translate "No, take me back" %}</a>
-                            <input type="submit" value="{% translate 'Copy' %}" class="default js-submit-copy-move">
-                            <span class="js-disabled-btn-tooltip disabled-btn-tooltip js-filer-tooltip filer-tooltip-wrapper"
-                                title="{% translate 'It is not allowed to copy files into same folder' %}" tabindex="-1">
-                                <a class="default navigator-button" disabled>{% translate 'Copy' %}</a>
-                            </span>
-                        </div>
+                    {% include "admin/filer/folder/destination_tree_field.html" %}
+
+                    {{ copy_form.as_p }}
+
+                    <div class="submit-row text-right clearfix">
+                        <a href="#" class="button cancel-link">{% translate "No, take me back" %}</a>
+                        <input type="submit" value="{% translate 'Copy' %}" class="default">
                     </div>
-                </form>
-            {% endif %}
+                </div>
+            </form>
         {% endif %}
     {% endif %}
 {% endblock %}

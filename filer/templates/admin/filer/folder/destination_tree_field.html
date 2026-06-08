@@ -1,0 +1,220 @@
+{% load i18n %}
+<p>
+    <label for="destination">{% blocktrans %}Destination folder:{% endblocktrans %}</label>
+    <span id="destination-name">{% trans "Select a folder below." %}</span>
+    <input type="hidden" name="destination" id="destination" value="{{ selected_destination_folder|default:'' }}">
+</p>
+<div id="destination-tree" class="filer-destination-tree"></div>
+
+<style>
+    .filer-destination-tree {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 8px;
+        max-height: 350px;
+        overflow-y: auto;
+        margin-bottom: 12px;
+        background: #fff;
+    }
+    .filer-destination-tree ul {
+        list-style: none;
+        padding-left: 20px;
+        margin: 0;
+    }
+    .filer-destination-tree > ul {
+        padding-left: 0;
+    }
+    .filer-destination-tree li {
+        padding: 2px 0;
+    }
+    .filer-tree-node {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        padding: 3px 6px;
+        border-radius: 3px;
+        user-select: none;
+    }
+    .filer-tree-node:hover {
+        background: #f0f0f0;
+    }
+    .filer-tree-node.selected {
+        background: #79aec8;
+        color: #fff;
+    }
+    .filer-tree-node.unselectable {
+        color: #999;
+        cursor: default;
+    }
+    .filer-tree-node.unselectable:hover {
+        background: transparent;
+    }
+    .filer-tree-toggle {
+        display: inline-block;
+        width: 18px;
+        text-align: center;
+        font-size: 10px;
+        flex-shrink: 0;
+        color: #666;
+    }
+    .filer-tree-node.selected .filer-tree-toggle {
+        color: #fff;
+    }
+    .filer-tree-icon {
+        margin-right: 5px;
+        flex-shrink: 0;
+    }
+    .filer-tree-title {
+        white-space: nowrap;
+    }
+    .filer-tree-loading {
+        color: #999;
+        font-style: italic;
+        padding: 4px 8px;
+    }
+    .filer-tree-empty {
+        color: #999;
+        font-style: italic;
+        padding: 8px;
+    }
+</style>
+
+<script>
+(function() {
+    var DESTINATION_URL = '{% url "admin:filer-destination_folders" %}';
+    var SELECTED_FOLDERS = [{% for f in folders_queryset %}{{ f.pk }}{% if not forloop.last %},{% endif %}{% endfor %}];
+    var CURRENT_FOLDER = {{ instance.pk|default:'null' }};
+    var destinationInput = document.getElementById('destination');
+    var destinationName = document.getElementById('destination-name');
+    var treeContainer = document.getElementById('destination-tree');
+    var selectedNode = null;
+
+    function fetchChildren(parentKey) {
+        var params = new URLSearchParams({
+            selected_folders: JSON.stringify(SELECTED_FOLDERS),
+            parent: parentKey || '',
+            current_folder: CURRENT_FOLDER || ''
+        });
+        return fetch(DESTINATION_URL + '?' + params.toString(), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function(resp) { return resp.json(); });
+    }
+
+    function getNodePath(li) {
+        var parts = [];
+        var node = li;
+        while (node) {
+            var titleEl = node.querySelector(':scope > .filer-tree-node .filer-tree-title');
+            if (titleEl) parts.unshift(titleEl.textContent);
+            node = node.parentElement ? node.parentElement.closest('.filer-destination-tree li') : null;
+        }
+        return '/' + parts.join('/');
+    }
+
+    function selectNode(li, key) {
+        if (selectedNode) {
+            selectedNode.querySelector('.filer-tree-node').classList.remove('selected');
+        }
+        selectedNode = li;
+        li.querySelector('.filer-tree-node').classList.add('selected');
+        destinationInput.value = key;
+        destinationName.textContent = getNodePath(li);
+        // Dispatch change for copy-move-files.js validation
+        destinationInput.dispatchEvent(new Event('change', {bubbles: true}));
+    }
+
+    function createNode(item) {
+        var li = document.createElement('li');
+
+        var nodeDiv = document.createElement('div');
+        nodeDiv.className = 'filer-tree-node' + (item.unselectable ? ' unselectable' : '');
+
+        var toggle = document.createElement('span');
+        toggle.className = 'filer-tree-toggle';
+        if (item.lazy) {
+            toggle.textContent = '▶';
+        } else {
+            toggle.innerHTML = '&nbsp;';
+        }
+        nodeDiv.appendChild(toggle);
+
+        var icon = document.createElement('span');
+        icon.className = 'filer-tree-icon';
+        icon.textContent = '📁';
+        nodeDiv.appendChild(icon);
+
+        var title = document.createElement('span');
+        title.className = 'filer-tree-title';
+        title.textContent = item.title;
+        nodeDiv.appendChild(title);
+
+        li.appendChild(nodeDiv);
+
+        var childrenLoaded = false;
+        var expanded = false;
+
+        nodeDiv.addEventListener('click', function(e) {
+            e.stopPropagation();
+
+            // Select the node if it's selectable
+            if (!item.unselectable) {
+                selectNode(li, item.key);
+            }
+
+            // Toggle expand/collapse for lazy nodes
+            if (item.lazy) {
+                if (!childrenLoaded) {
+                    // Load children
+                    toggle.textContent = '…';
+                    fetchChildren(item.key).then(function(children) {
+                        childrenLoaded = true;
+                        if (children.length > 0) {
+                            var childUl = document.createElement('ul');
+                            children.forEach(function(child) {
+                                childUl.appendChild(createNode(child));
+                            });
+                            li.appendChild(childUl);
+                            expanded = true;
+                            toggle.textContent = '▼';
+                        } else {
+                            toggle.innerHTML = '&nbsp;';
+                            item.lazy = false;
+                        }
+                    });
+                } else {
+                    // Toggle visibility
+                    var childUl = li.querySelector(':scope > ul');
+                    if (childUl) {
+                        expanded = !expanded;
+                        childUl.style.display = expanded ? '' : 'none';
+                        toggle.textContent = expanded ? '▼' : '▶';
+                    }
+                }
+            }
+        });
+
+        return li;
+    }
+
+    function loadTree() {
+        treeContainer.innerHTML = '<div class="filer-tree-loading">Loading…</div>';
+        fetchChildren(null).then(function(items) {
+            treeContainer.innerHTML = '';
+            if (items.length === 0) {
+                treeContainer.innerHTML = '<div class="filer-tree-empty">' +
+                    '{% filter escapejs %}{% trans "There are no destination folders available." %}{% endfilter %}' +
+                    '</div>';
+                return;
+            }
+            var ul = document.createElement('ul');
+            items.forEach(function(item) {
+                ul.appendChild(createNode(item));
+            });
+            treeContainer.appendChild(ul);
+        });
+    }
+
+    loadTree();
+})();
+</script>
+
