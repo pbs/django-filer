@@ -15,6 +15,8 @@ class DummyFolder(mixins.IconsMixin):
     is_smart_folder = True
     can_have_subfolders = False
     parent = None
+    pk = None
+    id = None
     _icon = "plainfolder"
 
     @property
