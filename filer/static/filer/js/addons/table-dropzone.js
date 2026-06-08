@@ -79,6 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (dropzones.length && Dropzone) {
         Dropzone.autoDiscover = false;
         dropzones.forEach((dropzoneElement) => {
+            if (dropzoneElement.dropzone) {
+                return;
+            }
             const dropzoneUrl = dropzoneElement.dataset.url;
             const dropzoneInstance = new Dropzone(dropzoneElement, {
                 url: dropzoneUrl,
