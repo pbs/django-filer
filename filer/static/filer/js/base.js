@@ -53,12 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const filterFiles = document.querySelector('.js-filter-files');
-    console.log(`[Filer Search] Search input element (.js-filter-files): ${filterFiles ? 'found' : 'NOT found'}`);
     if (filterFiles) {
-        console.log(`[Filer Search] Current search value: "${filterFiles.value}"`);
 
         filterFiles.addEventListener('focus', (event) => {
-            console.log('[Filer Search] Search input focused');
             const container = event.target.closest('.navigator-top-nav');
             if (container) {
                 container.classList.add('search-is-focused');
@@ -66,7 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         filterFiles.addEventListener('blur', (event) => {
-            console.log('[Filer Search] Search input blurred');
             const container = event.target.closest('.navigator-top-nav');
             if (container) {
                 const dropdownTrigger = container.querySelector('.dropdown-container a');
@@ -80,25 +76,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Search form submission logging
     const searchForm = document.querySelector('.js-filter-files-container');
     if (searchForm) {
-        console.log(`[Filer Search] Search form found. Action: "${searchForm.action}", Method: "${searchForm.method}"`);
         searchForm.addEventListener('submit', (event) => {
-            const searchInput = searchForm.querySelector('.js-filter-files');
-            const searchValue = searchInput ? searchInput.value : '(no input found)';
-            const limitCheckbox = searchForm.querySelector('#limit_search_to_folder');
-            const limitToFolder = limitCheckbox ? limitCheckbox.checked : false;
-            console.log(`[Filer Search] Form SUBMITTING: query="${searchValue}", limitToFolder=${limitToFolder}`);
-            console.log(`[Filer Search] Form action URL: ${searchForm.action}`);
-
-            // Log all form data
-            const formData = new FormData(searchForm);
-            const params = {};
-            for (const [key, value] of formData.entries()) {
-                params[key] = value;
-            }
-            console.log('[Filer Search] Form data:', JSON.stringify(params));
+            // form submit handling
         });
-    } else {
-        console.warn('[Filer Search] Search form (.js-filter-files-container) NOT found in DOM');
     }
 
     // Focus on the search field on page load
@@ -111,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filter) {
             filter.addEventListener('keydown', function (event) {
                 if (event.key === 'Enter') {
-                    console.log(`[Filer Search] Enter key pressed. Search value: "${this.value}"`);
+                    // Enter key pressed
                 }
                 const navContainer = this.closest(containerSelector);
                 if (navContainer) {
