@@ -112,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 parallelUploads: dropzoneElement.dataset[dataUploaderConnections] || 3,
                 accept: (file, done) => {
                     let uploadInfoClone;
+                    console.log('[Filer DnD] accept:', file.name, 'url:', dropzoneUrl);
 
                     Cl.mediator.remove('filer-upload-in-progress', destroyDropzones);
                     Cl.mediator.publish('filer-upload-in-progress');
@@ -148,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         submitNum++;
                         maxSubmitNum++;
+                        console.log('[Filer DnD] file accepted, submitNum:', submitNum, 'maxSubmitNum:', maxSubmitNum);
                         updateUploadNumber();
                         done();
                     }
@@ -240,8 +242,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 },
-                success: (file) => {
+                success: (file, response) => {
                     submitNum--;
+                    console.log('[Filer DnD] success:', file.name, 'submitNum:', submitNum, 'response:', response);
                     updateUploadNumber();
                     const fileEl = getElementByFile(file, dropzoneUrl);
                     if (fileEl) {
@@ -249,7 +252,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 },
                 queuecomplete: () => {
+                    console.log('[Filer DnD] queuecomplete: submitNum:', submitNum, 'hasErrors:', hasErrors);
                     if (submitNum !== 0) {
+                        console.warn('[Filer DnD] queuecomplete: submitNum is not 0, skipping reload');
                         return;
                     }
 
@@ -266,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (uploadNumber) {
                             uploadNumber.classList.add(hiddenClass);
                         }
+                        console.log('[Filer DnD] reloading after errors (1s delay)');
                         setTimeout(() => {
                             reloadOrdered();
                         }, 1000);
@@ -273,15 +279,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (uploadSuccess) {
                             uploadSuccess.classList.remove(hiddenClass);
                         }
+                        console.log('[Filer DnD] reloading now via reloadOrdered');
                         reloadOrdered();
                     }
                 },
                 error: (file, error) => {
+                    console.error('[Filer DnD] error:', file.name, 'error:', error, 'submitNum:', submitNum);
                     if (error === 'duplicate') {
                         // submitNum was never incremented for duplicates
+                        console.log('[Filer DnD] duplicate file, ignoring');
                         return;
                     }
                     submitNum--;
+                    console.log('[Filer DnD] after error decrement, submitNum:', submitNum);
                     updateUploadNumber();
                     const fileEl = getElementByFile(file, dropzoneUrl);
                     if (fileEl) {
