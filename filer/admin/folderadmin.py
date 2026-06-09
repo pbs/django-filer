@@ -1291,12 +1291,20 @@ class FolderAdmin(FolderPermissionModelAdmin):
     rename_files.short_description = _("Rename files")
 
     def extract_files(self, request, files_queryset, folders_queryset):
+        if request.method != 'POST':
+            return None
+
         from django.contrib.contenttypes.models import ContentType
         from ..models import Archive
         success_format = "Successfully extracted archive {}."
 
         files_queryset = files_queryset.filter(
             polymorphic_ctype=ContentType.objects.get_for_model(Archive).id)
+
+        if not files_queryset.exists():
+            self.message_user(request, _("No archive files were selected."))
+            return None
+
         # cannot extract in unfiled files folder
         if files_queryset.filter(folder__isnull=True).exists():
             raise PermissionDenied
@@ -1338,6 +1346,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                     request,
                     _("%s: %s" % (f.actual_name, err_msg))
                 )
+        return None
 
     extract_files.short_description = _("Extract selected zip files")
 
