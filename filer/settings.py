@@ -67,7 +67,7 @@ DEFERRED_THUMBNAIL_SIZES = (
 # classes that I should check for when adding files
 FILER_FILE_MODELS = getattr(
     settings, 'FILER_FILE_MODELS',
-    (FILER_IMAGE_MODEL, 'filer.File'))
+    (FILER_IMAGE_MODEL, 'filer.Archive', 'filer.File'))
 
 _FALLBACK_STORAGE_BACKEND = 'django.core.files.storage.FileSystemStorage'
 
