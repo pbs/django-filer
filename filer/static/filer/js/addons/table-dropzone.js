@@ -88,19 +88,27 @@ document.addEventListener('DOMContentLoaded', () => {
         body.dataset.maxFiles = dropzoneBase.dataset.maxFiles;
         body.dataset.maxFilesize = dropzoneBase.dataset.maxFiles;
         body.classList.add('js-filer-dropzone');
+        console.log('[Filer DnD] dropzoneBase found, url:', baseUrl, 'folder:', baseFolderTitle);
+    } else {
+        console.log('[Filer DnD] No .js-filer-dropzone-base element found on page');
     }
 
     Cl.mediator.subscribe('filer-upload-in-progress', destroyDropzones);
 
     dropzones = document.querySelectorAll(dropzoneSelector);
+    console.log('[Filer DnD] Found', dropzones.length, 'dropzone elements (.js-filer-dropzone)');
 
     if (dropzones.length && Dropzone) {
         Dropzone.autoDiscover = false;
         dropzones.forEach((dropzoneElement) => {
             if (dropzoneElement.dropzone) {
+                console.log('[Filer DnD] Skipping element (already has dropzone):', dropzoneElement.tagName, dropzoneElement.className);
                 return;
             }
             const dropzoneUrl = dropzoneElement.dataset.url;
+            console.log('[Filer DnD] Creating Dropzone instance for', dropzoneElement.tagName,
+                'url:', dropzoneUrl, 'maxFiles:', dropzoneElement.dataset.maxFiles,
+                'maxFilesize:', dropzoneElement.dataset.maxFilesize);
             const dropzoneInstance = new Dropzone(dropzoneElement, {
                 url: dropzoneUrl,
                 paramName: 'file',
@@ -228,6 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 },
                 sending: (file) => {
+                    console.log('[Filer DnD] sending:', file.name, 'to:', dropzoneUrl);
                     const fileEl = getElementByFile(file, dropzoneUrl);
                     if (fileEl) {
                         fileEl.classList.remove(hiddenClass);
@@ -315,5 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
+    } else {
+        console.warn('[Filer DnD] No dropzone instances created. dropzones.length:', dropzones.length, 'Dropzone:', !!Dropzone);
     }
 });

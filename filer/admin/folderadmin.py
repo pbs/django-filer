@@ -703,7 +703,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
             action = action_form.cleaned_data['action']
             select_across = action_form.cleaned_data['select_across']
             func, name, description = self.get_actions(request)[action]
-            logger.debug("[Action] Dispatching action=%s, func=%s", action, func.__name__)
+            logger.warning("[Action] Dispatching action=%s, func=%s", action, func.__name__)
 
             # Get the list of selected PKs. If nothing's selected, we can't
             # perform an action on it, so bail. Except we want to perform
@@ -731,10 +731,10 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 files_queryset = files_queryset.filter(pk__in=selected_files)
                 folders_queryset = folders_queryset.filter(
                     pk__in=selected_folders)
-                logger.debug("[Action] selected_files=%s, selected_folders=%s",
+                logger.warning("[Action] selected_files=%s, selected_folders=%s",
                              selected_files, selected_folders)
 
-            logger.debug("[Action] Calling %s with files_qs count=%d, folders_qs count=%d",
+            logger.warning("[Action] Calling %s with files_qs count=%d, folders_qs count=%d",
                          name, files_queryset.count(), folders_queryset.count())
             response = func(self, request, files_queryset, folders_queryset)
 
@@ -1251,17 +1251,17 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
     def extract_files(self, request, files_queryset, folders_queryset):
         if request.method != 'POST':
-            logger.debug("[Extract] Skipping: request.method=%s (not POST)", request.method)
+            logger.warning("[Extract] Skipping: request.method=%s (not POST)", request.method)
             return None
 
         from ..models import Archive
         success_format = "Successfully extracted archive {}."
 
-        logger.debug("[Extract] Starting extract_files action")
-        logger.debug("[Extract] files_queryset count=%d, pks=%s",
+        logger.warning("[Extract] Starting extract_files action")
+        logger.warning("[Extract] files_queryset count=%d, pks=%s",
                      files_queryset.count(),
                      list(files_queryset.values_list('pk', flat=True)))
-        logger.debug("[Extract] files in queryset: %s",
+        logger.warning("[Extract] files in queryset: %s",
                      list(files_queryset.values_list('pk', 'original_filename', 'file', 'polymorphic_ctype_id')))
 
         # Filter by zip file extension rather than polymorphic_ctype,
@@ -1274,7 +1274,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
             extension_filter |= Q(file__iendswith=ext)
         files_queryset = files_queryset.filter(extension_filter)
 
-        logger.debug("[Extract] After extension filter: count=%d, pks=%s",
+        logger.warning("[Extract] After extension filter: count=%d, pks=%s",
                      files_queryset.count(),
                      list(files_queryset.values_list('pk', 'original_filename', 'file')))
 
@@ -1297,9 +1297,9 @@ class FolderAdmin(FolderPermissionModelAdmin):
         def _as_archive(filer_file):
             """Convert a File instance to Archive so extract methods work."""
             if isinstance(filer_file, Archive):
-                logger.debug("[Extract] File pk=%s is already an Archive instance", filer_file.pk)
+                logger.warning("[Extract] File pk=%s is already an Archive instance", filer_file.pk)
                 return filer_file
-            logger.debug("[Extract] Converting File pk=%s (%s) to Archive instance "
+            logger.warning("[Extract] Converting File pk=%s (%s) to Archive instance "
                          "(polymorphic_ctype=%s)",
                          filer_file.pk, filer_file.original_filename,
                          filer_file.polymorphic_ctype)
@@ -1310,7 +1310,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
         def is_valid_archive(filer_file):
             is_valid = filer_file.is_valid()
-            logger.debug("[Extract] is_valid_archive pk=%s: %s", filer_file.pk, is_valid)
+            logger.warning("[Extract] is_valid_archive pk=%s: %s", filer_file.pk, is_valid)
             if not is_valid:
                 error_format = "{} is not a valid zip file"
                 message = error_format.format(filer_file.clean_actual_name)
@@ -1319,7 +1319,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
         def has_collisions(filer_file):
             collisions = filer_file.collisions()
-            logger.debug("[Extract] has_collisions pk=%s: %s", filer_file.pk, collisions)
+            logger.warning("[Extract] has_collisions pk=%s: %s", filer_file.pk, collisions)
             if collisions:
                 error_format = "Files/Folders from {archive} with names:"
                 error_format += "{names} already exist."
@@ -1335,13 +1335,13 @@ class FolderAdmin(FolderPermissionModelAdmin):
         for f in files_queryset:
             f = _as_archive(f)
             if not is_valid_archive(f) or has_collisions(f):
-                logger.debug("[Extract] Skipping file pk=%s (invalid or collisions)", f.pk)
+                logger.warning("[Extract] Skipping file pk=%s (invalid or collisions)", f.pk)
                 continue
-            logger.debug("[Extract] Extracting file pk=%s (%s)", f.pk, f.original_filename)
+            logger.warning("[Extract] Extracting file pk=%s (%s)", f.pk, f.original_filename)
             try:
                 f.extract()
                 message = success_format.format(f.actual_name)
-                logger.info("[Extract] Success: %s", message)
+                logger.warning("[Extract] Success: %s", message)
                 self.message_user(request, _(message))
                 for err_msg in f.extract_errors:
                     logger.warning("[Extract] Extract warning for %s: %s", f.actual_name, err_msg)
