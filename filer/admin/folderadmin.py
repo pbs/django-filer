@@ -413,37 +413,19 @@ class FolderAdmin(FolderPermissionModelAdmin):
         limit_search_to_folder = request.GET.get('limit_search_to_folder',
                                                  False) in (True, 'on')
 
-        logger.debug(
-            "[Filer Search] query=%r, search_terms=%r, search_mode=%s, "
-            "limit_search_to_folder=%s, folder=%s (id=%s, is_root=%s)",
-            q, search_terms, search_mode, limit_search_to_folder,
-            folder.name if folder else None,
-            folder.pk if folder else None,
-            folder.is_root if folder else None,
-        )
-
         if len(search_terms) > 0:
             if folder and limit_search_to_folder and not folder.is_root:
                 desc_folder_ids = folder.get_descendants_ids()
-                logger.debug(
-                    "[Filer Search] Limiting to folder %s and %d descendant folders",
-                    folder.name, len(desc_folder_ids),
-                )
                 # Do not include current folder itself in search results.
                 folder_qs = Folder.objects.filter(pk__in=desc_folder_ids)
                 # Limit search results to files in the current folder or any
                 # nested folder.
                 file_qs = File.objects.filter(folder_id__in=desc_folder_ids + [folder.pk])
             else:
-                logger.debug("[Filer Search] Searching globally (all folders and files)")
                 folder_qs = self.get_queryset(request)
                 file_qs = File.objects.all()
             folder_qs = self.filter_folder(folder_qs, search_terms).prefetch_related("children", "all_files")
             file_qs = self.filter_file(file_qs, search_terms)
-            logger.debug(
-                "[Filer Search] Results: %d folders, %d files found for terms=%r",
-                folder_qs.count(), file_qs.count(), search_terms,
-            )
 
             show_result_count = True
         else:
@@ -619,10 +601,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
             else:
                 return "%s__icontains" % field_name
 
-        logger.debug(
-            "[Filer Search] filter_folder: terms=%r, search_fields=%r, owner_lookups=%r",
-            terms, self.search_fields, self.get_owner_filter_lookups(),
-        )
         for term in terms:
             filters = models.Q()
             for filter_ in self.search_fields:
@@ -630,11 +608,9 @@ class FolderAdmin(FolderPermissionModelAdmin):
             for filter_ in self.get_owner_filter_lookups():
                 filters |= models.Q(**{filter_: term})
             qs = qs.filter(filters)
-        logger.debug("[Filer Search] filter_folder query: %s", qs.query)
         return qs
 
     def filter_file(self, qs, terms=()):
-        logger.debug("[Filer Search] filter_file: terms=%r", terms)
         for term in terms:
             filters = (models.Q(name__icontains=term)
                        | models.Q(description__icontains=term)
@@ -642,7 +618,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
             for filter_ in self.get_owner_filter_lookups():
                 filters |= models.Q(**{filter_: term})
             qs = qs.filter(filters)
-        logger.debug("[Filer Search] filter_file query: %s", qs.query)
         return qs
 
     @property
@@ -703,7 +678,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
             action = action_form.cleaned_data['action']
             select_across = action_form.cleaned_data['select_across']
             func, name, description = self.get_actions(request)[action]
-            print("[Action] Dispatching action=%s, func=%s" % (action, func.__name__))
 
             # Get the list of selected PKs. If nothing's selected, we can't
             # perform an action on it, so bail. Except we want to perform
@@ -731,10 +705,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 files_queryset = files_queryset.filter(pk__in=selected_files)
                 folders_queryset = folders_queryset.filter(
                     pk__in=selected_folders)
-                print("[Action] selected_files=%s, selected_folders=%s" % (selected_files, selected_folders))
 
-            print("[Action] Calling %s with files_qs count=%d, folders_qs count=%d" % (
-                name, files_queryset.count(), folders_queryset.count()))
             response = func(self, request, files_queryset, folders_queryset)
 
             # Actions may return an HttpResponse, which will be used as the
@@ -1255,10 +1226,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
         from ..models import Archive
         success_format = "Successfully extracted archive {}."
 
-        # DEBUG: print to stdout (bypasses logging config)
-        file_data = list(files_queryset.values_list('pk', 'original_filename', 'file', 'polymorphic_ctype_id'))
-        print("[Extract] files_queryset count=%d, data=%s" % (files_queryset.count(), file_data))
-
         # Filter by zip file extension rather than polymorphic_ctype,
         # because zip files may have been uploaded as plain File instances
         zip_extensions = Archive._filename_extensions  # ['.zip']
@@ -1269,35 +1236,23 @@ class FolderAdmin(FolderPermissionModelAdmin):
             extension_filter |= Q(file__iendswith=ext)
         files_queryset = files_queryset.filter(extension_filter)
 
-        filtered_data = list(files_queryset.values_list('pk', 'original_filename', 'file'))
-        print("[Extract] After extension filter: count=%d, data=%s" % (files_queryset.count(), filtered_data))
-
         if not files_queryset.exists():
-            # Show the user exactly what files were selected and why they didn't match
-            debug_msg = ("No archive files were selected. "
-                         "DEBUG: Selected files: %s. "
-                         "Looking for extensions: %s" % (file_data, zip_extensions))
-            print("[Extract] " + debug_msg)
-            self.message_user(request, debug_msg, level=messages.WARNING)
+            self.message_user(request, _("No archive files were selected."),
+                              level=messages.WARNING)
             return None
 
         # cannot extract in unfiled files folder
         if files_queryset.filter(folder__isnull=True).exists():
-            print("[Extract] Cannot extract in unfiled files folder")
             raise PermissionDenied
 
         if not has_multi_file_action_permission(request, files_queryset,
                 Folder.objects.none()):
-            print("[Extract] Permission denied for multi file action")
             raise PermissionDenied
 
         def _as_archive(filer_file):
             """Convert a File instance to Archive so extract methods work."""
             if isinstance(filer_file, Archive):
-                print("[Extract] File pk=%s is already an Archive" % filer_file.pk)
                 return filer_file
-            print("[Extract] Converting File pk=%s (%s) to Archive (ctype=%s)" % (
-                filer_file.pk, filer_file.original_filename, filer_file.polymorphic_ctype))
             archive = Archive()
             archive.__dict__.update(filer_file.__dict__)
             archive.extract_errors = []
@@ -1305,7 +1260,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
         def is_valid_archive(filer_file):
             is_valid = filer_file.is_valid()
-            print("[Extract] is_valid pk=%s: %s" % (filer_file.pk, is_valid))
             if not is_valid:
                 error_format = "{} is not a valid zip file"
                 message = error_format.format(filer_file.clean_actual_name)
@@ -1314,7 +1268,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
 
         def has_collisions(filer_file):
             collisions = filer_file.collisions()
-            print("[Extract] collisions pk=%s: %s" % (filer_file.pk, collisions))
             if collisions:
                 error_format = "Files/Folders from {archive} with names:"
                 error_format += "{names} already exist."
@@ -1330,22 +1283,18 @@ class FolderAdmin(FolderPermissionModelAdmin):
         for f in files_queryset:
             f = _as_archive(f)
             if not is_valid_archive(f) or has_collisions(f):
-                print("[Extract] Skipping pk=%s (invalid or collisions)" % f.pk)
                 continue
-            print("[Extract] Extracting pk=%s (%s)" % (f.pk, f.original_filename))
             try:
                 f.extract()
                 message = success_format.format(f.actual_name)
-                print("[Extract] Success: %s" % message)
                 self.message_user(request, _(message))
                 for err_msg in f.extract_errors:
-                    print("[Extract] Warning: %s: %s" % (f.actual_name, err_msg))
                     messages.warning(
                         request,
                         _("%s: %s" % (f.actual_name, err_msg))
                     )
             except Exception as e:
-                logger.exception("[Extract] Exception extracting file pk=%s: %s", f.pk, e)
+                logger.exception("Exception extracting file pk=%s: %s", f.pk, e)
                 messages.error(request, _("Error extracting %s: %s" % (f.actual_name, str(e))))
         return None
 

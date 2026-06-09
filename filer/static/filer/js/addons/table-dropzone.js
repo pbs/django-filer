@@ -88,27 +88,19 @@ document.addEventListener('DOMContentLoaded', () => {
         body.dataset.maxFiles = dropzoneBase.dataset.maxFiles;
         body.dataset.maxFilesize = dropzoneBase.dataset.maxFilesize;
         body.classList.add('js-filer-dropzone');
-        console.log('[Filer DnD] dropzoneBase found, url:', baseUrl, 'folder:', baseFolderTitle);
-    } else {
-        console.log('[Filer DnD] No .js-filer-dropzone-base element found on page');
     }
 
     Cl.mediator.subscribe('filer-upload-in-progress', destroyDropzones);
 
     dropzones = document.querySelectorAll(dropzoneSelector);
-    console.log('[Filer DnD] Found', dropzones.length, 'dropzone elements (.js-filer-dropzone)');
 
     if (dropzones.length && Dropzone) {
         Dropzone.autoDiscover = false;
         dropzones.forEach((dropzoneElement) => {
             if (dropzoneElement.dropzone) {
-                console.log('[Filer DnD] Skipping element (already has dropzone):', dropzoneElement.tagName, dropzoneElement.className);
                 return;
             }
             const dropzoneUrl = dropzoneElement.dataset.url;
-            console.log('[Filer DnD] Creating Dropzone instance for', dropzoneElement.tagName,
-                'url:', dropzoneUrl, 'maxFiles:', dropzoneElement.dataset.maxFiles,
-                'maxFilesize:', dropzoneElement.dataset.maxFilesize);
             const dropzoneInstance = new Dropzone(dropzoneElement, {
                 url: dropzoneUrl,
                 paramName: 'file',
@@ -120,7 +112,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 parallelUploads: dropzoneElement.dataset[dataUploaderConnections] || 3,
                 accept: (file, done) => {
                     let uploadInfoClone;
-                    console.log('[Filer DnD] accept:', file.name, 'url:', dropzoneUrl);
 
                     Cl.mediator.remove('filer-upload-in-progress', destroyDropzones);
                     Cl.mediator.publish('filer-upload-in-progress');
@@ -157,7 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         submitNum++;
                         maxSubmitNum++;
-                        console.log('[Filer DnD] file accepted, submitNum:', submitNum, 'maxSubmitNum:', maxSubmitNum);
                         updateUploadNumber();
                         done();
                     }
@@ -236,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 },
                 sending: (file) => {
-                    console.log('[Filer DnD] sending:', file.name, 'to:', dropzoneUrl);
                     const fileEl = getElementByFile(file, dropzoneUrl);
                     if (fileEl) {
                         fileEl.classList.remove(hiddenClass);
@@ -253,7 +242,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 success: (file, response) => {
                     submitNum--;
-                    console.log('[Filer DnD] success:', file.name, 'submitNum:', submitNum, 'response:', response);
                     updateUploadNumber();
                     const fileEl = getElementByFile(file, dropzoneUrl);
                     if (fileEl) {
@@ -261,9 +249,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 },
                 queuecomplete: () => {
-                    console.log('[Filer DnD] queuecomplete: submitNum:', submitNum, 'hasErrors:', hasErrors);
                     if (submitNum !== 0) {
-                        console.warn('[Filer DnD] queuecomplete: submitNum is not 0, skipping reload');
                         return;
                     }
 
@@ -280,7 +266,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (uploadNumber) {
                             uploadNumber.classList.add(hiddenClass);
                         }
-                        console.log('[Filer DnD] reloading after errors (1s delay)');
                         setTimeout(() => {
                             reloadOrdered();
                         }, 1000);
@@ -288,19 +273,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (uploadSuccess) {
                             uploadSuccess.classList.remove(hiddenClass);
                         }
-                        console.log('[Filer DnD] reloading now via reloadOrdered');
                         reloadOrdered();
                     }
                 },
                 error: (file, error) => {
-                    console.error('[Filer DnD] error:', file.name, 'error:', error, 'submitNum:', submitNum);
                     if (error === 'duplicate') {
-                        // submitNum was never incremented for duplicates
-                        console.log('[Filer DnD] duplicate file, ignoring');
                         return;
                     }
                     submitNum--;
-                    console.log('[Filer DnD] after error decrement, submitNum:', submitNum);
                     updateUploadNumber();
                     const fileEl = getElementByFile(file, dropzoneUrl);
                     if (fileEl) {
@@ -324,7 +304,5 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
         });
-    } else {
-        console.warn('[Filer DnD] No dropzone instances created. dropzones.length:', dropzones.length, 'Dropzone:', !!Dropzone);
     }
 });
