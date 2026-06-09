@@ -36,6 +36,24 @@ document.addEventListener('DOMContentLoaded', () => {
     let baseUrl;
     let baseFolderTitle;
 
+    // utility to update query string (same as upload-button)
+    const updateQuery = (uri, key, value) => {
+        const re = new RegExp(`([?&])${key}=.*?(&|$)`, 'i');
+        const separator = uri.indexOf('?') !== -1 ? '&' : '?';
+        const hash = window.location.hash;
+        uri = uri.replace(/#.*$/, '');
+        if (uri.match(re)) {
+            return uri.replace(re, `$1${key}=${value}$2`) + hash;
+        } else {
+            return uri + separator + key + '=' + value + hash;
+        }
+    };
+
+    const reloadOrdered = () => {
+        const uri = window.location.toString();
+        window.location.replace(updateQuery(uri, 'order_by', '-modified_at'));
+    };
+
     const updateUploadNumber = () => {
         if (uploadNumber) {
             uploadNumber.textContent = `${maxSubmitNum - submitNum}/${maxSubmitNum}`;
@@ -249,23 +267,29 @@ document.addEventListener('DOMContentLoaded', () => {
                             uploadNumber.classList.add(hiddenClass);
                         }
                         setTimeout(() => {
-                            window.location.reload();
+                            reloadOrdered();
                         }, 1000);
                     } else {
                         if (uploadSuccess) {
                             uploadSuccess.classList.remove(hiddenClass);
                         }
-                        window.location.reload();
+                        reloadOrdered();
                     }
                 },
                 error: (file, error) => {
-                    updateUploadNumber();
                     if (error === 'duplicate') {
+                        // submitNum was never incremented for duplicates
                         return;
+                    }
+                    submitNum--;
+                    updateUploadNumber();
+                    const fileEl = getElementByFile(file, dropzoneUrl);
+                    if (fileEl) {
+                        fileEl.remove();
                     }
                     hasErrors = true;
                     if (window.filerShowError) {
-                        window.filerShowError(`${file.name}: ${error.message}`);
+                        window.filerShowError(`${file.name}: ${error.message || error}`);
                     }
                 }
             });

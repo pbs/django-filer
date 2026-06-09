@@ -1248,12 +1248,18 @@ class FolderAdmin(FolderPermissionModelAdmin):
         if request.method != 'POST':
             return None
 
-        from django.contrib.contenttypes.models import ContentType
         from ..models import Archive
         success_format = "Successfully extracted archive {}."
 
-        files_queryset = files_queryset.filter(
-            polymorphic_ctype=ContentType.objects.get_for_model(Archive).id)
+        # Filter by zip file extension rather than polymorphic_ctype,
+        # because zip files may have been uploaded as plain File instances
+        zip_extensions = Archive._filename_extensions  # ['.zip']
+        from django.db.models import Q
+        extension_filter = Q()
+        for ext in zip_extensions:
+            extension_filter |= Q(original_filename__iendswith=ext)
+            extension_filter |= Q(file__iendswith=ext)
+        files_queryset = files_queryset.filter(extension_filter)
 
         if not files_queryset.exists():
             self.message_user(request, _("No archive files were selected."))
@@ -1266,6 +1272,15 @@ class FolderAdmin(FolderPermissionModelAdmin):
         if not has_multi_file_action_permission(request, files_queryset,
                 Folder.objects.none()):
             raise PermissionDenied
+
+        def _as_archive(filer_file):
+            """Convert a File instance to Archive so extract methods work."""
+            if isinstance(filer_file, Archive):
+                return filer_file
+            archive = Archive()
+            archive.__dict__.update(filer_file.__dict__)
+            archive.extract_errors = []
+            return archive
 
         def is_valid_archive(filer_file):
             is_valid = filer_file.is_valid()
@@ -1290,6 +1305,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
             return len(collisions) > 0
 
         for f in files_queryset:
+            f = _as_archive(f)
             if not is_valid_archive(f) or has_collisions(f):
                 continue
             f.extract()
