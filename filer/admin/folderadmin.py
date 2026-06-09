@@ -74,7 +74,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
     save_as = True  # see ImageAdmin
     actions = ['delete_files_or_folders', 'move_files_and_folders',
                'copy_files_and_folders', 'resize_images', 'rename_files',
-               'extract_files', 'move_to_clipboard',
+               'extract_files',
                'enable_restriction', 'disable_restriction']
 
     if DJANGO_VERSION >= (5, 2):
@@ -355,7 +355,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
     def directory_listing(self, request, folder_id=None, viewtype=None):
         if not request.user.has_perm("filer.can_use_directory_listing"):
             raise PermissionDenied()
-        clipboard = tools.get_user_clipboard(request.user)
         file_type = request.GET.get('file_type', None)
         if viewtype == 'images_with_missing_data':
             folder = ImagesWithMissingData()
@@ -523,16 +522,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
         items = list(itertools.chain(folder_qs, file_qs))
         paginator = Paginator(items, FILER_PAGINATE_BY)
 
-        # Are we moving to clipboard?
-        if request.method == 'POST' and '_save' not in request.POST:
-            clipboard = tools.get_user_clipboard(request.user)
-            for f in file_qs:
-                if "move-to-clipboard-%d" % (f.id,) in request.POST:
-                    if (f.is_readonly_for_user(request.user) or
-                            f.is_restricted_for_user(request.user)):
-                        raise PermissionDenied
-                    tools.move_file_to_clipboard(request, [f], clipboard)
-                    return HttpResponseRedirect(request.get_full_path())
 
         selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
         # Actions with no confirmation
@@ -583,9 +572,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
         context = self.admin_site.each_context(request)
         context.update({
             'folder': folder,
-            'clipboard_files': File.objects.filter(
-                in_clipboards__clipboarditem__clipboard__user=request.user
-            ).distinct(),
             'paginator': paginator,
             'paginated_items': paginated_items,
             'virtual_items': virtual_items,
@@ -772,44 +758,12 @@ class FolderAdmin(FolderPermissionModelAdmin):
             del actions['delete_selected']
         return actions
 
-    def move_to_clipboard(self, request, files_queryset, folders_queryset):
-        """
-        Action which moves the selected files to clipboard.
-        PBS: Only moves files, not folders. Checks has_multi_file_action_permission.
-        """
-        if request.method != 'POST':
-            return None
-
-        if not has_multi_file_action_permission(
-                request, files_queryset,
-                Folder.objects.none()):
-            raise PermissionDenied
-
-        clipboard = tools.get_user_clipboard(request.user)
-        # We define it like that so that we can modify it inside the
-        # move_files function
-        files_count = [0]
-
-        def move_files(files):
-            files_count[0] += tools.move_file_to_clipboard(request, files, clipboard)
-
-        move_files(files_queryset)
-        if files_count[0] > 0:
-            self.message_user(request,
-                _("Successfully moved %(count)d files to clipboard.") % {
-                    "count": files_count[0], })
-        else:
-            self.message_user(request,
-                _("No files were moved to clipboard."))
-        return None
-
-    move_to_clipboard.short_description = _("Move selected files to clipboard")
 
     def files_set_public_or_private(self, request, set_public, files_queryset,
                                     folders_queryset):
         """
         Action which enables or disables permissions for selected files and
-        files in selected folders to clipboard (set them private or public).
+        files in selected folders (set them private or public).
         """
 
         if not self.has_change_permission(request):

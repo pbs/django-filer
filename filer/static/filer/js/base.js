@@ -236,22 +236,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (dropdown) {
 
-            dropdown.addEventListener('click', (clickEvent) => {
-                if (clickEvent.target.tagName === 'A') {
-                    const li = clickEvent.target.closest('li');
-                    const targetIndex = Array.from(dropdown.querySelectorAll('li')).indexOf(li) + 1;
+        dropdown.addEventListener('click', (clickEvent) => {
+            if (clickEvent.target.tagName === 'A') {
+                const li = clickEvent.target.closest('li');
+                const targetIndex = Array.from(dropdown.querySelectorAll('li')).indexOf(li) + 1;
 
-                    clickEvent.preventDefault();
+                clickEvent.preventDefault();
 
-                    if (actionsSelect && actionsGo) {
-                        const options = actionsSelect.querySelectorAll('option');
-                        if (options[targetIndex]) {
-                            options[targetIndex].selected = true;
-                        }
-                        actionsGo.click();
+                if (actionsSelect && actionsGo) {
+                    const options = actionsSelect.querySelectorAll('option');
+                    if (options[targetIndex]) {
+                        actionsSelect.value = options[targetIndex].value;
+                        options[targetIndex].selected = true;
                     }
+                    actionsGo.click();
                 }
-            });
+            }
+        });
         }
 
         actionsMenu.addEventListener('click', (e) => {
