@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         body.dataset.url = baseUrl;
         body.dataset.folderName = baseFolderTitle;
         body.dataset.maxFiles = dropzoneBase.dataset.maxFiles;
-        body.dataset.maxFilesize = dropzoneBase.dataset.maxFiles;
+        body.dataset.maxFilesize = dropzoneBase.dataset.maxFilesize;
         body.classList.add('js-filer-dropzone');
         console.log('[Filer DnD] dropzoneBase found, url:', baseUrl, 'folder:', baseFolderTitle);
     } else {

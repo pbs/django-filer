@@ -10,7 +10,7 @@ if (Dropzone) {
 
 document.addEventListener('DOMContentLoaded', () => {
     const previewImageSelector = '.js-img-preview';
-    const dropzoneSelector = '.js-filer-dropzone';
+    const dropzoneSelector = '.js-filer-dropzone:not(.js-filer-dropzone-base):not(.js-filer-dropzone-folder):not(.js-filer-dropzone-info-message)';
     const dropzones = document.querySelectorAll(dropzoneSelector);
     const messageSelector = '.js-filer-dropzone-message';
     const lookupButtonSelector = '.js-related-lookup';
