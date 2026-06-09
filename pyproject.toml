@@ -19,11 +19,12 @@ requires-python = ">=3.10"
 dependencies = [
     "django>=5.1,<5.2",
     "django-mptt>=0.6,<1.0",
-    "django-polymorphic>=4.0.0",
-    "django-js-asset>=2.0.0",
+    "django-polymorphic>=4.0.0,<5.0",
+    "django-js-asset>=2.0.0,<3.0",
     "easy-thumbnails[svg]>=2,<3.0",
     "Unidecode>=0.04,<1.2",
     "filetype",
+    "pytz",
 
     # Pin svglib to a version below 1.6.0.
     # The latest version (1.6.0) adds pycairo as a dependency,
@@ -54,8 +55,8 @@ classifiers = [
 
 [project.optional-dependencies]
 s3 = [
-    "boto3",
-    "django-storages",
+    "boto3>=1.26,<2.0",
+    "django-storages>=1.13,<2.0",
 ]
 heif = ["pillow-heif"]
 
