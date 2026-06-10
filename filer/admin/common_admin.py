@@ -126,7 +126,7 @@ class CommonModelAdmin(admin.ModelAdmin):
             'select_folder': selectfolder_status(request),
         })
         return super(CommonModelAdmin, self).render_change_form(
-            request=request, context=context, add=False,
+            request=request, context=context, add=add,
             change=change, form_url=form_url, obj=obj)
 
     def response_change(self, request, obj):
