@@ -46,6 +46,11 @@ class FileAdminChangeFrom(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if "file" in self.fields:
             self.fields["file"].widget = forms.FileInput()
+        # Pre-populate the "name" field with the original_filename when it is
+        # empty so that users see the current effective filename on first edit.
+        if self.instance and self.instance.pk and "name" in self.fields:
+            if not self.instance.name and self.instance.original_filename:
+                self.initial["name"] = self.instance.original_filename
 
     def clean(self):
         from ..validation import validate_upload

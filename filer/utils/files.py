@@ -113,8 +113,27 @@ def handle_request_files_upload(request):
     mime_type = upload.content_type.lower()
     extensions = mimetypes.guess_all_extensions(mime_type)
     if mime_type != 'application/octet-stream' and extensions and iext.lower() not in extensions:
-        msg = "MIME-Type '{mimetype}' does not correspond to file extension of {filename}."
-        raise UploadException(msg.format(mimetype=mime_type, filename=filename))
+        # The browser's content type doesn't match the file extension.
+        # Check if the file extension has its own known MIME type (e.g.
+        # browser sends image/webp for a .jpg file, or application/x-zip-compressed
+        # for a .zip file).
+        guessed_type = mimetypes.guess_type(filename)[0]
+        if guessed_type:
+            # Extension has a known type – use it instead of rejecting.
+            mime_type = guessed_type
+        elif iext:
+            # Extension exists but is not recognized by Python's mimetypes
+            # (e.g. .jfif).  Trust the browser's content type rather than
+            # rejecting the upload.
+            pass
+        else:
+            # No file extension at all – trust the browser's content type.
+            pass
+    elif not extensions and mime_type != 'application/octet-stream':
+        # Browser sent an unrecognized MIME type; try to guess from filename
+        guessed_type = mimetypes.guess_type(filename)[0]
+        if guessed_type:
+            mime_type = guessed_type
     return upload, filename, is_raw, mime_type
 
 

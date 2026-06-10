@@ -109,7 +109,10 @@ def ajax_upload(request, folder_id=None):
     # Re-detect mime_type after truncation may have added an extension
     import mimetypes as _mimetypes
     guessed_type = _mimetypes.guess_type(filename)[0]
-    if guessed_type and mime_type == 'application/octet-stream':
+    if guessed_type and (
+        mime_type == 'application/octet-stream'
+        or not _mimetypes.guess_all_extensions(mime_type)
+    ):
         mime_type = guessed_type
 
     # Get clipboard

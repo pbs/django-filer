@@ -1,9 +1,8 @@
-from django import forms
-from filer.admin.fileadmin import FileAdmin
+from filer.admin.fileadmin import FileAdmin, FileAdminChangeFrom
 from filer.models import Archive
 
 
-class ArchiveAdminForm(forms.ModelForm):
+class ArchiveAdminForm(FileAdminChangeFrom):
 
     class Meta:
         model = Archive
