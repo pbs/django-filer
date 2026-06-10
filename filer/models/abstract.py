@@ -139,7 +139,14 @@ class BaseImage(File):
                     self._width, self._height = pil_image.size
                     self._transparent = easy_thumbnails.utils.is_transparent(pil_image)
                 imgfile.seek(0)
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Could not read image dimensions for '%s' (mime=%s): %s: %s",
+                    getattr(self, 'original_filename', '?'),
+                    getattr(self, 'mime_type', '?'),
+                    type(e).__name__, e,
+                )
                 if post_init is False:
                     # in case `imgfile` could not be found, unset dimensions
                     # but only if not initialized by loading a fixture file
@@ -155,13 +162,22 @@ class BaseImage(File):
         # Only check pixel size for new uploads (no pk yet)
         if self.file and FILER_MAX_IMAGE_PIXELS and not self.pk:
             if self._width is None or self._height is None:
-                # If image size exceeds Pillow's max image size, Pillow will not return width or height
-                pixels = 2 * FILER_MAX_IMAGE_PIXELS + 1
-                aspect = 16 / 9
-            else:
-                width, height = max(1, self.width), max(1, self.height)
-                pixels: int = width * height
-                aspect: float = width / height
+                # Image dimensions could not be determined – this could mean
+                # the image format is not recognized by Pillow or the image is
+                # too large for Pillow to handle.
+                msg = _(
+                    "Image \"%(filename)s\" could not be processed: format not recognized or image "
+                    "too large. Supported formats: JPEG, PNG, GIF, WebP, SVG. "
+                    "Max resolution: %(max_pixels)d million pixels."
+                ) % dict(
+                    filename=self.original_filename or '?',
+                    max_pixels=FILER_MAX_IMAGE_PIXELS // 1000000,
+                )
+                raise ValidationError(str(msg), code="image_size")
+
+            width, height = max(1, self.width), max(1, self.height)
+            pixels: int = width * height
+            aspect: float = width / height
             res_x: int = int((FILER_MAX_IMAGE_PIXELS * aspect) ** 0.5)
             res_y: int = int(res_x / aspect)
             if pixels > 2 * FILER_MAX_IMAGE_PIXELS:

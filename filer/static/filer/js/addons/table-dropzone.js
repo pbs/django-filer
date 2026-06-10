@@ -247,6 +247,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (fileEl) {
                         fileEl.remove();
                     }
+                    if (response && response.error) {
+                        hasErrors = true;
+                        if (window.filerShowError) {
+                            window.filerShowError(`${file.name}: ${response.error}`);
+                        }
+                    }
                 },
                 queuecomplete: () => {
                     if (submitNum !== 0) {
