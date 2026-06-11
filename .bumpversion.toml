@@ -1,0 +1,35 @@
+[tool.bumpversion]
+current_version = "3.4.4+pbs.4.dev.gdc8739a0.20260611"
+commit = false
+tag = false
+parse = """(?x)
+    (?P<major>0|[1-9]\\d*)\\.
+    (?P<minor>0|[1-9]\\d*)\\.
+    (?P<patch>0|[1-9]\\d*)
+    \\+pbs\\.
+    (?P<pbs>0|[1-9]\\d*)
+    (?:
+        \\.(?P<prekind>dev)
+        \\.g[0-9a-f]{7,40}
+        \\.\\d{8}
+    )?
+"""
+
+serialize = [
+    "{major}.{minor}.{patch}+pbs.{pbs}.{prekind}.g{$GITHUB_SHA}.{now:%Y%m%d}",
+    "{major}.{minor}.{patch}+pbs.{pbs}"
+]
+
+
+[tool.bumpversion.parts.prekind]
+values = [
+    "",
+    "dev"
+]
+optional_value = ""
+
+
+[[tool.bumpversion.files]]
+filename = "filer/__init__.py"
+search = "{current_version}"
+replace = "{new_version}"
