@@ -39,5 +39,6 @@ bump-prekind: ## Bump prekind dev version: 3.4.4+pbs.3 -> 3.4.4+pbs.3.dev.g<sha>
 		echo "Nothing to bump: '$$current' is already a dev release from this commit. To create another dev release you must make at least one new commit first. To create a release bump run 'make bump-pbs'."; \
 		exit 1; \
 	fi; \
-	GITHUB_SHA="$${GITHUB_SHA:-$$(git rev-parse --short=8 HEAD)}" bump-my-version bump --allow-dirty prekind
+	sha="$${GITHUB_SHA:-$$(git rev-parse --short=8 HEAD)}"; \
+	GITHUB_SHA="$${sha:0:8}" bump-my-version bump --allow-dirty prekind
 
