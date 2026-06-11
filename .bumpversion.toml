@@ -1,5 +1,5 @@
 [tool.bumpversion]
-current_version = "3.4.4+pbs.4.dev.gdc8739a0.20260611"
+current_version = "3.4.4+pbs.1"
 commit = false
 tag = false
 parse = """(?x)
