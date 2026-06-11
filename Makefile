@@ -33,9 +33,9 @@ test-clean: ## Remove the test Docker image
 bump-pbs: ## Bump PBS number: 3.4.4+pbs.3 -> 3.4.4+pbs.4
 	bump-my-version bump --allow-dirty pbs
 
-bump-prekind: ## Bump prekind dev version: 3.4.4+pbs.3 -> 3.4.4+pbs.3.dev.g<sha>.YYYYMMDD
+bump-prekind: ## Bump prekind dev version: 3.4.4+pbs.3 -> 3.4.4+pbs.3.dev.g<sha>.YYYYMMDD. Pass sha=<commit> to override.
 	@current=$$(grep "^__version__" filer/__init__.py | sed "s/^__version__ = '//;s/'.*//"); \
-	sha="$${GITHUB_SHA:-$$(git rev-parse --short=8 HEAD)}"; \
+	sha="$${sha:-$${GITHUB_SHA:-$$(git rev-parse --short=8 HEAD)}}"; \
 	sha8="$${sha:0:8}"; \
 	if echo "$$current" | grep -q '\.dev\.'; then \
 		current_sha=$$(echo "$$current" | sed -nE "s/.*\.dev\.g([0-9a-f]{7,40})\.[0-9]{8}/\1/p"); \
