@@ -1,4 +1,4 @@
-import logging
+import sys
 
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
@@ -77,7 +77,6 @@ def ajax_upload(request, folder_id=None):
     """
     Receives an upload from the uploader. Receives only one file at a time.
     """
-    logger = logging.getLogger(__name__)
 
     if not request.user.has_perm("filer.add_file"):
         messages.error(request, NO_PERMISSIONS)
@@ -106,7 +105,7 @@ def ajax_upload(request, folder_id=None):
             # else process the request as usual
             upload, filename, is_raw, mime_type = handle_upload(request)
     except Exception as e:
-        logger.exception("[ajax_upload] Error handling upload: %s", e)
+        print(f"[ajax_upload] Error handling upload: {e}", flush=True)
         return JsonResponse({'error': str(e)})
 
     # Truncate long filenames
@@ -122,8 +121,7 @@ def ajax_upload(request, folder_id=None):
     ):
         mime_type = guessed_type
 
-    logger.warning("[ajax_upload] filename=%s, mime_type=%s, size=%s",
-                   filename, mime_type, getattr(upload, 'size', '?'))
+    print(f"[ajax_upload] filename={filename}, mime_type={mime_type}, size={getattr(upload, 'size', '?')}", flush=True)
 
     # Get clipboard
     clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
@@ -144,7 +142,7 @@ def ajax_upload(request, folder_id=None):
                 fields=('original_filename', 'owner', 'file')
             )
             break
-    logger.warning("[ajax_upload] matched file type: %s", FileSubClass.__name__)
+    print(f"[ajax_upload] matched file type: {FileSubClass.__name__}", flush=True)
     uploadform = FileForm({'original_filename': filename, 'owner': request.user.pk},
                           {'file': upload})
     uploadform.request = request
@@ -156,14 +154,15 @@ def ajax_upload(request, folder_id=None):
             # Enforce the FILER_IS_PUBLIC_DEFAULT
             file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
         except ValidationError as error:
-            logger.warning("[ajax_upload] Validation error for '%s': %s", filename, error)
+            print(f"[ajax_upload] Validation error for '{filename}': {error}", flush=True)
             messages.error(request, str(error))
             return JsonResponse({'error': str(error)})
         file_obj.folder = folder
         try:
             file_obj.save()
         except Exception as error:
-            logger.exception("[ajax_upload] Error saving file '%s': %s", filename, error)
+            print(f"[ajax_upload] Error saving file '{filename}': {error}", flush=True)
+            import traceback; traceback.print_exc()
             messages.error(request, str(error))
             return JsonResponse({'error': str(error)})
         clipboard_item = ClipboardItem(
@@ -187,12 +186,12 @@ def ajax_upload(request, folder_id=None):
                 data['original_image'] = file_obj.url
             return JsonResponse(data)
         except Exception as error:
-            logger.exception("[ajax_upload] Error building response for '%s': %s", filename, error)
+            print(f"[ajax_upload] Error building response for '{filename}': {error}", flush=True)
+            import traceback; traceback.print_exc()
             messages.error(request, str(error))
             return JsonResponse({"error": str(error)})
     else:
-        logger.warning("[ajax_upload] Form invalid for '%s' (mime=%s, type=%s): %s",
-                       filename, mime_type, FileSubClass.__name__, uploadform.errors.as_text())
+        print(f"[ajax_upload] Form invalid for '{filename}' (mime={mime_type}, type={FileSubClass.__name__}): {uploadform.errors.as_text()}", flush=True)
         for key, error_list in uploadform.errors.items():
             for error in error_list:
                 messages.error(request, error)
