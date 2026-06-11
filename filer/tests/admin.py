@@ -246,19 +246,18 @@ class FilerClipboardAdminUrlsTests(TestCase):
         self.assertEqual(Clipboard.objects.count(), 1)
         clip = Clipboard.objects.get(id=1) # there is(or should be) just one clipboard
         self.assertEqual(clip.files.count(), 1)
-        # upload the same file again. This must fail since the
-        # clipboard can't contain two files with the same name
+        # upload the same file again with a fresh file handle.
+        # The stale clipboard entry should be replaced, not rejected.
+        file_obj2 = dj_files.File(open(self.filename, 'rb'))
         response = self.client.post(
             reverse('admin:filer-ajax_upload'), {
             'Filename': self.image_name,
-            'Filedata': file_obj,
+            'Filedata': file_obj2,
             'jsessionid': self.client.session.session_key, },
             **extra_headers
         )
         self.assertEqual(Image.objects.count(), 1)
-        self.assertIn('error', response.content.decode())
-        errormsg = ClipboardAdmin.messages['already-exists'].format(self.image_name)
-        self.assertIn(errormsg, response.content.decode())
+        self.assertNotIn('error', response.content.decode())
         self.assertEqual(clip.files.count(), 1)
 
     def test_filer_ajax_upload_file(self):

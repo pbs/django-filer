@@ -126,11 +126,16 @@ def ajax_upload(request, folder_id=None):
     # Get clipboard
     clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
 
-    # Check for duplicate files in clipboard
+    # Remove any stale clipboard entries with the same filename
+    # (e.g. from previous failed upload attempts) to allow re-upload
     existing_in_clipboard = clipboard.files.filter(original_filename=filename)
     if existing_in_clipboard.exists():
-        error_msg = ClipboardAdmin.messages['already-exists'].format(filename)
-        return JsonResponse({'error': error_msg})
+        print(f"[ajax_upload] Removing {existing_in_clipboard.count()} stale clipboard entry for '{filename}'", flush=True)
+        # Get the actual file pks before clearing the M2M
+        stale_file_pks = list(existing_in_clipboard.values_list('pk', flat=True))
+        ClipboardItem.objects.filter(clipboard=clipboard, file_id__in=stale_file_pks).delete()
+        from ..models import File as FilerFile
+        FilerFile.objects.filter(pk__in=stale_file_pks).delete()
 
     # find the file type
     for filer_class in filer_settings.FILER_FILE_MODELS:
