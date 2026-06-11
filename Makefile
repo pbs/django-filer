@@ -46,13 +46,13 @@ bump-prekind: ## Bump prekind dev version: 3.4.4+pbs.3 -> 3.4.4+pbs.3.dev.g<sha>
 		fi; \
 		base=$$(echo "$$current" | sed -E "s/\.dev\.g[0-9a-f]+\.[0-9]{8}$$//"); \
 		new_version="$$base.dev.g$$sha8.$$(date +%Y%m%d)"; \
-		echo "Updating dev release for new commit: $$current -> $$new_version"; \
-		bump-my-version bump --allow-dirty --new-version "$$new_version" || exit $$?; \
-		sed -i.bak -E "s/^current_version = \".*\"/current_version = \"$$new_version\"/" .bumpversion.toml; \
-		rm -f .bumpversion.toml.bak; \
-		exit 0; \
+	else \
+		base="$$current"; \
+		new_version="$$base.dev.g$$sha8.$$(date +%Y%m%d)"; \
 	fi; \
-	GITHUB_SHA="$$sha8" bump-my-version bump --allow-dirty prekind
+	echo "Bumping: $$current -> $$new_version"; \
+	sed -i.bak "s/__version__ = '$$current'/__version__ = '$$new_version'/" filer/__init__.py && rm -f filer/__init__.py.bak; \
+	sed -i.bak -E "s/^current_version = \"[^\"]+\"/current_version = \"$$new_version\"/" .bumpversion.toml && rm -f .bumpversion.toml.bak
 
 
 build: ## Build distribution packages (sdist and wheel)
