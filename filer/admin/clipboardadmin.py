@@ -122,8 +122,8 @@ def ajax_upload(request, folder_id=None):
     ):
         mime_type = guessed_type
 
-    logger.debug("[ajax_upload] filename=%s, mime_type=%s, size=%s",
-                 filename, mime_type, getattr(upload, 'size', '?'))
+    logger.warning("[ajax_upload] filename=%s, mime_type=%s, size=%s",
+                   filename, mime_type, getattr(upload, 'size', '?'))
 
     # Get clipboard
     clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
@@ -144,7 +144,7 @@ def ajax_upload(request, folder_id=None):
                 fields=('original_filename', 'owner', 'file')
             )
             break
-    logger.debug("[ajax_upload] matched file type: %s", FileSubClass.__name__)
+    logger.warning("[ajax_upload] matched file type: %s", FileSubClass.__name__)
     uploadform = FileForm({'original_filename': filename, 'owner': request.user.pk},
                           {'file': upload})
     uploadform.request = request
