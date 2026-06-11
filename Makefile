@@ -35,12 +35,24 @@ bump-pbs: ## Bump PBS number: 3.4.4+pbs.3 -> 3.4.4+pbs.4
 
 bump-prekind: ## Bump prekind dev version: 3.4.4+pbs.3 -> 3.4.4+pbs.3.dev.g<sha>.YYYYMMDD
 	@current=$$(grep "^__version__" filer/__init__.py | sed "s/^__version__ = '//;s/'.*//"); \
-	if echo "$$current" | grep -q '\.dev\.'; then \
-		echo "Nothing to bump: '$$current' is already a dev release from this commit. To create another dev release you must make at least one new commit first. To create a release bump run 'make bump-pbs'."; \
-		exit 1; \
-	fi; \
 	sha="$${GITHUB_SHA:-$$(git rev-parse --short=8 HEAD)}"; \
-	GITHUB_SHA="$${sha:0:8}" bump-my-version bump --allow-dirty prekind
+	sha8="$${sha:0:8}"; \
+	if echo "$$current" | grep -q '\.dev\.'; then \
+		current_sha=$$(echo "$$current" | sed -nE "s/.*\.dev\.g([0-9a-f]{7,40})\.[0-9]{8}/\1/p"); \
+		current_sha8="$${current_sha:0:8}"; \
+		if [ "$$current_sha8" = "$$sha8" ]; then \
+			echo "Nothing to bump: '$$current' already targets commit '$$sha8'. Create a new commit first or run 'make bump-pbs'."; \
+			exit 1; \
+		fi; \
+		base=$$(echo "$$current" | sed -E "s/\.dev\.g[0-9a-f]+\.[0-9]{8}$$//"); \
+		new_version="$$base.dev.g$$sha8.$$(date +%Y%m%d)"; \
+		echo "Updating dev release for new commit: $$current -> $$new_version"; \
+		bump-my-version bump --allow-dirty --new-version "$$new_version" || exit $$?; \
+		sed -i.bak -E "s/^current_version = \".*\"/current_version = \"$$new_version\"/" .bumpversion.toml; \
+		rm -f .bumpversion.toml.bak; \
+		exit 0; \
+	fi; \
+	GITHUB_SHA="$$sha8" bump-my-version bump --allow-dirty prekind
 
 
 build: ## Build distribution packages (sdist and wheel)
