@@ -1,4 +1,3 @@
-import sys
 
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
@@ -105,7 +104,6 @@ def ajax_upload(request, folder_id=None):
             # else process the request as usual
             upload, filename, is_raw, mime_type = handle_upload(request)
     except Exception as e:
-        print(f"[ajax_upload] Error handling upload: {e}", flush=True)
         return JsonResponse({'error': str(e)})
 
     # Truncate long filenames
@@ -121,7 +119,6 @@ def ajax_upload(request, folder_id=None):
     ):
         mime_type = guessed_type
 
-    print(f"[ajax_upload] filename={filename}, mime_type={mime_type}, size={getattr(upload, 'size', '?')}", flush=True)
 
     # Get clipboard
     clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
@@ -130,7 +127,6 @@ def ajax_upload(request, folder_id=None):
     # (e.g. from previous failed upload attempts) to allow re-upload
     existing_in_clipboard = clipboard.files.filter(original_filename=filename)
     if existing_in_clipboard.exists():
-        print(f"[ajax_upload] Removing {existing_in_clipboard.count()} stale clipboard entry for '{filename}'", flush=True)
         # Get the actual file pks before clearing the M2M
         stale_file_pks = list(existing_in_clipboard.values_list('pk', flat=True))
         ClipboardItem.objects.filter(clipboard=clipboard, file_id__in=stale_file_pks).delete()
@@ -147,7 +143,6 @@ def ajax_upload(request, folder_id=None):
                 fields=('original_filename', 'owner', 'file')
             )
             break
-    print(f"[ajax_upload] matched file type: {FileSubClass.__name__}", flush=True)
     uploadform = FileForm({'original_filename': filename, 'owner': request.user.pk},
                           {'file': upload})
     uploadform.request = request
@@ -159,15 +154,12 @@ def ajax_upload(request, folder_id=None):
             # Enforce the FILER_IS_PUBLIC_DEFAULT
             file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
         except ValidationError as error:
-            print(f"[ajax_upload] Validation error for '{filename}': {error}", flush=True)
             messages.error(request, str(error))
             return JsonResponse({'error': str(error)})
         file_obj.folder = folder
         try:
             file_obj.save()
         except Exception as error:
-            print(f"[ajax_upload] Error saving file '{filename}': {error}", flush=True)
-            import traceback; traceback.print_exc()
             messages.error(request, str(error))
             return JsonResponse({'error': str(error)})
         clipboard_item = ClipboardItem(
@@ -191,12 +183,9 @@ def ajax_upload(request, folder_id=None):
                 data['original_image'] = file_obj.url
             return JsonResponse(data)
         except Exception as error:
-            print(f"[ajax_upload] Error building response for '{filename}': {error}", flush=True)
-            import traceback; traceback.print_exc()
             messages.error(request, str(error))
             return JsonResponse({"error": str(error)})
     else:
-        print(f"[ajax_upload] Form invalid for '{filename}' (mime={mime_type}, type={FileSubClass.__name__}): {uploadform.errors.as_text()}", flush=True)
         for key, error_list in uploadform.errors.items():
             for error in error_list:
                 messages.error(request, error)

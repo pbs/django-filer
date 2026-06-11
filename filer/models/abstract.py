@@ -140,12 +140,12 @@ class BaseImage(File):
                     self._transparent = easy_thumbnails.utils.is_transparent(pil_image)
                 imgfile.seek(0)
             except Exception as e:
-                print(
-                    f"[ajax_upload] Could not read image dimensions for "
-                    f"'{getattr(self, 'original_filename', '?')}' "
-                    f"(mime={getattr(self, 'mime_type', '?')}): "
-                    f"{type(e).__name__}: {e}",
-                    flush=True,
+                logger.warning(
+                    "Could not read image dimensions for '%s' (mime=%s): %s: %s",
+                    getattr(self, 'original_filename', '?'),
+                    getattr(self, 'mime_type', '?'),
+                    type(e).__name__,
+                    e,
                 )
                 if post_init is False:
                     # in case `imgfile` could not be found, unset dimensions
