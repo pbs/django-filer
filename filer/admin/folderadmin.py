@@ -1043,6 +1043,29 @@ class FolderAdmin(FolderPermissionModelAdmin):
             f.parent = destination
             f.save()
 
+    def _validate_destination(self, request, destination, folders_queryset, current_folder, allow_self=False):
+        """
+        Validate that destination is a legitimate target for copy/move without
+        recursively traversing the entire folder tree.  Returns True if valid.
+        """
+        if not destination.has_read_permission(request):
+            return False
+        if not destination.has_add_children_permission(request):
+            return False
+        if not allow_self and destination == current_folder:
+            return False
+        # Cannot move/copy into one of the selected folders or their descendants
+        selected_pks = set(folders_queryset.values_list('pk', flat=True))
+        if destination.pk in selected_pks:
+            return False
+        # Check that destination is not a descendant of any selected folder
+        ancestor = destination.parent
+        while ancestor is not None:
+            if ancestor.pk in selected_pks:
+                return False
+            ancestor = ancestor.parent
+        return True
+
     def move_files_and_folders(self, request, files_queryset, folders_queryset):
         opts = self.model._meta
         app_label = opts.app_label
@@ -1057,7 +1080,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
         current_folder = self._get_current_action_folder(request, files_queryset, folders_queryset)
         perms_needed = self._check_move_perms(request, files_queryset, folders_queryset)
         to_move = self._list_all_to_copy_or_move(request, files_queryset, folders_queryset)
-        folders = self._list_all_destination_folders(request, folders_queryset, current_folder, False)
 
         if request.method == 'POST' and request.POST.get('post'):
             if perms_needed:
@@ -1066,8 +1088,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                 destination = self.get_queryset(request).get(pk=request.POST.get('destination'))
             except self.model.DoesNotExist:
                 raise PermissionDenied
-            folders_dict = dict(folders)
-            if destination not in folders_dict or not folders_dict[destination][1]:
+            if not self._validate_destination(request, destination, folders_queryset, current_folder):
                 raise PermissionDenied
 
             # PBS: validate destination is not a core folder
@@ -1121,7 +1142,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
             "instance": current_folder,
             "breadcrumbs_action": _("Move files and/or folders"),
             "to_move": to_move,
-            "destination_folders": folders,
+            "destination_folders": [],
             "files_queryset": files_queryset,
             "folders_queryset": folders_queryset,
             "perms_lacking": perms_needed,
@@ -1429,7 +1450,6 @@ class FolderAdmin(FolderPermissionModelAdmin):
         current_folder = self._get_current_action_folder(request, files_queryset, folders_queryset)
         perms_needed = self._check_copy_perms(request, files_queryset, folders_queryset)
         to_copy = self._list_all_to_copy_or_move(request, files_queryset, folders_queryset)
-        folders = self._list_all_destination_folders(request, folders_queryset, current_folder, False)
 
         if request.method == 'POST' and request.POST.get('post'):
             if perms_needed:
@@ -1440,8 +1460,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
                     destination = self.get_queryset(request).get(pk=request.POST.get('destination'))
                 except self.model.DoesNotExist:
                     raise PermissionDenied
-                folders_dict = dict(folders)
-                if destination not in folders_dict or not folders_dict[destination][1]:
+                if not self._validate_destination(request, destination, folders_queryset, current_folder):
                     raise PermissionDenied
 
                 # PBS: validate destination is not a core folder
@@ -1486,7 +1505,7 @@ class FolderAdmin(FolderPermissionModelAdmin):
             "instance": current_folder,
             "breadcrumbs_action": _("Copy files and/or folders"),
             "to_copy": to_copy,
-            "destination_folders": folders,
+            "destination_folders": [],
             "selected_destination_folder": selected_destination_folder,
             "copy_form": form,
             "files_queryset": files_queryset,
