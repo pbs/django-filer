@@ -162,18 +162,19 @@ class BaseImage(File):
         # Only check pixel size for new uploads (no pk yet)
         if self.file and FILER_MAX_IMAGE_PIXELS and not self.pk:
             if self._width is None or self._height is None:
-                # Image dimensions could not be determined – this could mean
-                # the image format is not recognized by Pillow or the image is
-                # too large for Pillow to handle.
-                msg = _(
-                    "Image \"%(filename)s\" could not be processed: format not recognized or image "
-                    "too large. Supported formats: JPEG, PNG, GIF, WebP, SVG. "
-                    "Max resolution: %(max_pixels)d million pixels."
-                ) % dict(
-                    filename=self.original_filename or '?',
-                    max_pixels=FILER_MAX_IMAGE_PIXELS // 1000000,
+                # Image dimensions could not be determined – this can happen
+                # for valid images that Pillow cannot fully parse (e.g. unusual
+                # JPEG markers, CMYK colour space, progressive encoding, etc.).
+                # Do NOT reject the upload; just skip the pixel-limit check and
+                # log a warning so operators can investigate if needed.
+                logger.warning(
+                    "Skipping pixel-limit check for '%s' (mime=%s): "
+                    "image dimensions could not be determined.",
+                    getattr(self, 'original_filename', '?'),
+                    getattr(self, 'mime_type', '?'),
                 )
-                raise ValidationError(str(msg), code="image_size")
+                super().clean()
+                return
 
             width, height = max(1, self.width), max(1, self.height)
             pixels: int = width * height
