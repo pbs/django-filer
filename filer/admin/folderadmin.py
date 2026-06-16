@@ -1366,13 +1366,13 @@ class FolderAdmin(FolderPermissionModelAdmin):
         return self.files_toggle_restriction(
             request, True, files_qs, folders_qs)
 
-    enable_restriction.short_description = _("Enable restriction for selected files and/or folders")
+    enable_restriction.short_description = _("Enable role restriction for selected files and/or folders")
 
     def disable_restriction(self, request, files_qs, folders_qs):
         return self.files_toggle_restriction(
             request, False, files_qs, folders_qs)
 
-    disable_restriction.short_description = _("Disable restriction for selected files and/or folders")
+    disable_restriction.short_description = _("Disable role restriction for selected files and/or folders")
 
     def _generate_new_filename(self, filename, suffix):
         basename, extension = os.path.splitext(filename)
