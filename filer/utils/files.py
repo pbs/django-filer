@@ -1,53 +1,171 @@
-#-*- coding: utf-8 -*-
-import os
 import mimetypes
+import os
+import uuid
 
+from django.http.multipartparser import ChunkIter, SkipFile, StopFutureHandlers, StopUpload, exhaust
+from django.template.defaultfilters import slugify as slugify_django
+from django.utils.encoding import force_str
 from django.utils.text import get_valid_filename as get_valid_filename_django
-from django.template.defaultfilters import slugify
-from django.core.files.uploadedfile import SimpleUploadedFile
 
-from filer.settings import FILER_FILE_MODELS
-from filer.utils.loader import load_object
-from filer.utils.is_ajax import is_ajax
-
-
-import filetype
 
 class UploadException(Exception):
     pass
 
 
 def handle_upload(request):
-    if not request.method == "POST":
-        raise UploadException("AJAX request not valid: must be POST")
-    if is_ajax(request):
+    if not request.method == 'POST':
+        raise UploadException("XMLHttpRequest not valid: must be POST")
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         # the file is stored raw in the request
         is_raw = True
         filename = request.GET.get('qqfile', False) or request.GET.get('filename', False) or ''
-        if hasattr(request, 'body'):
-            # raw_post_data was depreciated in django 1.4:
-            # https://docs.djangoproject.com/en/dev/releases/1.4/#httprequest-raw-post-data-renamed-to-httprequest-body
-            data = request.body
-        elif hasattr(request, 'raw_post_data'):
-            # fallback for django 1.3
-            data = request.raw_post_data
+
+        try:
+            content_length = int(request.headers['content-length'])
+        except (IndexError, TypeError, ValueError):
+            content_length = None
+
+        if content_length < 0:
+            # This means we shouldn't continue...raise an error.
+            raise UploadException("Invalid content length: %r" % content_length)
+
+        mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+
+        upload_handlers = request.upload_handlers
+        for handler in upload_handlers:
+            handler.handle_raw_input(request,
+                                     request.META,
+                                     content_length,
+                                     None,
+                                     None)
+            pass
+
+        # For compatibility with low-level network APIs (with 32-bit integers),
+        # the chunk size should be < 2^31, but still divisible by 4.
+        possible_sizes = [x.chunk_size for x in upload_handlers if x.chunk_size]
+        chunk_size = min([2 ** 31 - 4] + possible_sizes)
+
+        stream = ChunkIter(request, chunk_size)
+        counters = [0] * len(upload_handlers)
+
+        try:
+            for handler in upload_handlers:
+                try:
+                    handler.new_file(None, filename,
+                                     None, content_length, None)
+                except StopFutureHandlers:
+                    break
+
+            for chunk in stream:
+                for i, handler in enumerate(upload_handlers):
+                    chunk_length = len(chunk)
+                    chunk = handler.receive_data_chunk(chunk,
+                                                       counters[i])
+                    counters[i] += chunk_length
+                    if chunk is None:
+                        # If the chunk received by the handler is None, then don't continue.
+                        break
+
+        except SkipFile:
+            # Just use up the rest of this file...
+            exhaust(stream)
+        except StopUpload as e:
+            if not e.connection_reset:
+                exhaust(request)
         else:
-            raise UploadException("Request is not valid: there is no request body.")
-        mime_type = mimetypes.guess_type(filename)[0] or "text/plain"
-        upload = SimpleUploadedFile(name=filename, content=data, content_type=mime_type)
+            # Make sure that the request data is all fed
+            exhaust(request)
+
+        # Signal that the upload has completed.
+        for handler in upload_handlers:
+            retval = handler.upload_complete()
+            if retval:
+                break
+
+        for i, handler in enumerate(upload_handlers):
+            file_obj = handler.file_complete(counters[i])
+            if file_obj:
+                upload = file_obj
+                break
     else:
         if len(request.FILES) == 1:
-            # FILES is a dictionary in Django but Ajax Upload gives the uploaded file an
-            # ID based on a random number, so it cannot be guessed here in the code.
-            # Rather than editing Ajax Upload to pass the ID in the querystring, note that
-            # each upload is a separate request so FILES should only have one entry.
-            # Thus, we can just grab the first (and only) value in the dict.
-            is_raw = False
-            upload = list(request.FILES.values())[0]
-            filename = upload.name
+            upload, filename, is_raw, mime_type = handle_request_files_upload(request)
         else:
-            raise UploadException("AJAX request not valid: Bad Upload")
-    return upload, filename, is_raw
+            raise UploadException("XMLHttpRequest request not valid: Bad Upload")
+    return upload, filename, is_raw, mime_type
+
+
+def handle_request_files_upload(request):
+    """
+    Handle request.FILES if len(request.FILES) == 1.
+    Returns tuple(upload, filename, is_raw, mime_type) where upload is file itself.
+    """
+    # FILES is a dictionary in Django but Ajax Upload gives the uploaded file
+    # an ID based on a random number, so it cannot be guessed here in the code.
+    # Rather than editing Ajax Upload to pass the ID in the querystring,
+    # note that each upload is a separate request so FILES should only
+    # have one entry.
+    # Thus, we can just grab the first (and only) value in the dict.
+    is_raw = False
+    upload = list(request.FILES.values())[0]
+    filename = upload.name
+    _, iext = os.path.splitext(filename)
+    mime_type = upload.content_type.lower()
+    extensions = mimetypes.guess_all_extensions(mime_type)
+    if mime_type != 'application/octet-stream' and extensions and iext.lower() not in extensions:
+        # The browser's content type doesn't match the file extension.
+        # Check if the file extension has its own known MIME type (e.g.
+        # browser sends image/webp for a .jpg file, or application/x-zip-compressed
+        # for a .zip file).
+        guessed_type = mimetypes.guess_type(filename)[0]
+        if guessed_type:
+            # Extension has a known type – use it instead of rejecting.
+            mime_type = guessed_type
+        elif iext:
+            # Extension exists but is not recognized by Python's mimetypes
+            # (e.g. .jfif).  Trust the browser's content type rather than
+            # rejecting the upload.
+            pass
+        else:
+            # No file extension at all – trust the browser's content type.
+            pass
+    elif not extensions and mime_type != 'application/octet-stream':
+        # Browser sent an unrecognized MIME type; try to guess from filename
+        guessed_type = mimetypes.guess_type(filename)[0]
+        if guessed_type:
+            mime_type = guessed_type
+    return upload, filename, is_raw, mime_type
+
+
+def slugify(string):
+    return slugify_django(force_str(string))
+
+
+def _ensure_safe_length(filename, max_length=155, random_suffix_length=16):
+    """
+    Ensures that the filename does not exceed the maximum allowed length.
+    If it does, the function truncates the filename and appends a random hexadecimal
+    suffix of length `random_suffix_length` to ensure uniqueness and compliance with
+    database constraints - even after markers for a thumbnail are added.
+
+    Parameters:
+        filename (str): The filename to check.
+        max_length (int): The maximum allowed length for the filename.
+        random_suffix_length (int): The length of the random suffix to append.
+
+    Returns:
+        str: The safe filename.
+
+
+    Reference issue: https://github.com/django-cms/django-filer/issues/1270
+    """
+
+    if len(filename) <= max_length:
+        return filename
+
+    keep_length = max_length - random_suffix_length
+    random_suffix = uuid.uuid4().hex[:random_suffix_length]
+    return filename[:keep_length] + random_suffix
 
 
 def get_valid_filename(s):
@@ -55,42 +173,61 @@ def get_valid_filename(s):
     like the regular get_valid_filename, but also slugifies away
     umlauts and stuff.
     """
-    if not s:
-        return ''
     s = get_valid_filename_django(s)
     filename, ext = os.path.splitext(s)
     filename = slugify(filename)
     ext = slugify(ext)
     if ext:
-        return "%s.%s" % (filename, ext)
+        valid_filename = "{}.{}".format(filename, ext)
     else:
-        return "%s" % (filename,)
+        valid_filename = "{}".format(filename)
 
+    # Ensure the filename meets the maximum length requirements.
+    return _ensure_safe_length(valid_filename)
+
+
+# PBS-specific: file type matching and filename utilities
 
 def matching_file_subtypes(filename, file_pointer, request):
     """
     Returns a list of valid subtypes for a given file.
     """
-    types = list(map(load_object, FILER_FILE_MODELS))
+    from ..settings import FILER_FILE_MODELS
+    from .loader import load_model
+
+    # If request/mime_type is None, try to guess from filename
+    mime_type = request
+    if mime_type is None and filename:
+        import mimetypes
+        mime_type = mimetypes.guess_type(filename)[0]
+
+    types = []
+    for model_path in FILER_FILE_MODELS:
+        types.append(load_model(model_path))
 
     def _match_subtype(subtype):
-        is_match = subtype.matches_file_type(filename, file_pointer, request)
-        return is_match
+        return subtype.matches_file_type(filename, file_pointer, mime_type)
     type_matches = list(filter(_match_subtype, types))
     return type_matches
 
 
 def truncate_filename(upload, maxlen=None):
     """
-    Return truncated filename
-    Pre-extension filename will be less than or equals maxlen(if passed)
+    Return truncated filename.
+    Pre-extension filename will be less than or equals maxlen (if passed).
     """
+    try:
+        import filetype as filetype_lib
+    except ImportError:
+        filetype_lib = None
+
     title, extension = os.path.splitext(upload.name)
     if not extension.lstrip('.'):
-        guessed = filetype.guess_extension(upload) or ''
-        # filetype reads bytes from the upload; seek back for later use
-        if hasattr(upload, 'seek'):
-            upload.seek(0)
+        guessed = ''
+        if filetype_lib is not None:
+            guessed = filetype_lib.guess_extension(upload) or ''
+            if hasattr(upload, 'seek'):
+                upload.seek(0)
     else:
         guessed = ''
     filename = '{title}.{ext}'.format(title=title[:maxlen],

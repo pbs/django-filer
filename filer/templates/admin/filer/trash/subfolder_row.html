@@ -11,5 +11,5 @@
     <div class="small">{% trans "Owner" %}: {% firstof subfolder.owner.email subfolder.owner.username "n/a" %}</div>
 </td>
 <td>
-    {% client_timezone subfolder.deleted_at %}
+    {{ subfolder.deleted_at }}
 </td>

@@ -1,30 +1,30 @@
-#-*- coding: utf-8 -*-
+
+from django.contrib import admin, messages
+from django.core.exceptions import ValidationError
 from django.forms.models import modelform_factory
-from django.core.exceptions import PermissionDenied
-from django.contrib import admin
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import JsonResponse
+from django.urls import path, reverse
+from django.utils.translation import gettext_lazy as _
 from django.views.decorators.csrf import csrf_exempt
-from django.urls import re_path
-from filer import settings as filer_settings
-from filer.models import Clipboard, ClipboardItem, Folder, tools
-from filer.utils.files import (
-    handle_upload, UploadException, matching_file_subtypes, truncate_filename
-)
-from filer.views import (
-    popup_param, selectfolder_param, current_site_param,
-    file_type_param
-)
-from filer.admin.tools import is_valid_destination
-from filer.utils.is_ajax import is_ajax
-import json
-import logging
 
-logger = logging.getLogger(__name__)
+from .. import settings as filer_settings
+from ..models import Clipboard, ClipboardItem, Folder
+from ..settings import FILER_THUMBNAIL_ICON_SIZE
+from ..utils.files import handle_request_files_upload, handle_upload, truncate_filename
+from ..utils.loader import load_model
+from ..validation import validate_upload
+from . import views
 
-# even though the CharField is limited at 255 characters, the filename is used in
-# thumbnail creation, which remembers the path and also post-fixes the name with
-# '__32x32_q85_crop_subsampling-2_upscale.jpg'-like strings
-FILENAME_LIMIT = 100 # larger values cause DataError
+
+NO_PERMISSIONS = _("You do not have permission to upload files.")
+NO_FOLDER_ERROR = _("Can't find folder to upload. Please refresh and try again")
+NO_PERMISSIONS_FOR_FOLDER = _(
+    "Can't use this folder, Permission Denied. Please select another folder."
+)
+
+
+Image = load_model(filer_settings.FILER_IMAGE_MODEL)
+
 
 # ModelAdmins
 class ClipboardItemInline(admin.TabularInline):
@@ -34,156 +34,33 @@ class ClipboardItemInline(admin.TabularInline):
 class ClipboardAdmin(admin.ModelAdmin):
     model = Clipboard
     inlines = [ClipboardItemInline]
-    # filter_horizontal = ('files',)
     raw_id_fields = ('user',)
     verbose_name = "DEBUG Clipboard"
     verbose_name_plural = "DEBUG Clipboards"
     messages = {
-        'already-exists': 'A file named {} already exists in the clipboard',
-        'request-invalid': "AJAX request not valid: form invalid '{}'"
+        'already-exists': "File '{}' already exists in the clipboard.",
     }
 
     def get_urls(self):
-        urls = super(ClipboardAdmin, self).get_urls()
-        url_patterns = [
-            re_path(r'^operations/paste_clipboard_to_folder/$',
-                self.admin_site.admin_view(self.paste_clipboard_to_folder),
-                name='filer-paste_clipboard_to_folder'),
-            re_path(r'^operations/discard_clipboard/$',
-                self.admin_site.admin_view(self.discard_clipboard),
-                name='filer-discard_clipboard'),
-            re_path(r'^operations/delete_clipboard/$',
-                self.admin_site.admin_view(self.delete_clipboard),
-                name='filer-delete_clipboard'),
-            # upload does it's own permission stuff (because of the stupid
-            # flash missing cookie stuff)
-            re_path(r'^operations/upload/$',
-                self.ajax_upload,
-                name='filer-ajax_upload'),
-        ]
-        url_patterns.extend(urls)
-        return url_patterns
+        return [
+            path('operations/paste_clipboard_to_folder/',
+                 self.admin_site.admin_view(views.paste_clipboard_to_folder),
+                 name='filer-paste_clipboard_to_folder'),
+            path('operations/discard_clipboard/',
+                 self.admin_site.admin_view(views.discard_clipboard),
+                 name='filer-discard_clipboard'),
+            path('operations/delete_clipboard/',
+                 self.admin_site.admin_view(views.delete_clipboard),
+                 name='filer-delete_clipboard'),
+            path('operations/upload/<int:folder_id>/',
+                 ajax_upload,
+                 name='filer-ajax_upload'),
+            path('operations/upload/no_folder/',
+                 ajax_upload,
+                 name='filer-ajax_upload'),
+        ] + super().get_urls()
 
-    def get_clipboard(self, request):
-        return Clipboard.objects.get(id=request.POST.get('clipboard_id'))
-
-    def make_clipboard_redirect(self, request):
-        return HttpResponseRedirect('%s%s%s%s%s' % (
-            request.POST.get('redirect_to', ''),
-            popup_param(request),
-            selectfolder_param(request),
-            current_site_param(request),
-            file_type_param(request)))
-
-    def paste_clipboard_to_folder(self, request):
-        if request.method == 'POST':
-            folder_id = request.POST.get('folder_id')
-            if not folder_id:
-                raise PermissionDenied
-            folder = Folder.objects.get(id=folder_id)
-            if not is_valid_destination(request, folder):
-                raise PermissionDenied
-
-            clipboard = self.get_clipboard(request)
-            files_moved = tools.move_files_from_clipboard_to_folder(
-                request, clipboard, folder)
-            tools.discard_clipboard_files(clipboard, files_moved)
-        return self.make_clipboard_redirect(request)
-
-    def discard_clipboard(self, request):
-        if request.method == 'POST':
-            clipboard = self.get_clipboard(request)
-            tools.discard_clipboard(clipboard)
-        return self.make_clipboard_redirect(request)
-
-    def delete_clipboard(self, request):
-        if request.method == 'POST':
-            tools.delete_clipboard(self.get_clipboard(request))
-        return self.make_clipboard_redirect(request)
-
-    def clone_files_from_clipboard_to_folder(self, request):
-        if request.method == 'POST':
-            folder_id = request.POST.get('folder_id')
-            if not folder_id:
-                raise PermissionDenied
-            folder = Folder.objects.get(id=folder_id)
-            if not is_valid_destination(request, folder):
-                raise PermissionDenied
-            tools.clone_files_from_clipboard_to_folder(
-                self.get_clipboard(request), folder)
-        return self.make_clipboard_redirect(request)
-
-    @csrf_exempt
-    def ajax_upload(self, request, folder_id=None):
-        """
-        receives an upload from the uploader. Receives only one file at the time.
-        """
-        mimetype = "application/json" if is_ajax(request) else "text/html"
-        upload, file_obj, clipboard_item = None, None, None
-        try:
-            upload, original_filename, _ = handle_upload(request)
-
-            filename = truncate_filename(upload, maxlen=FILENAME_LIMIT)
-            upload.name = filename # the upload raw has also the title saved in a CharField
-
-            # Get clipboad
-            clipboard, created = Clipboard.objects.get_or_create(user=request.user)
-
-            if any(f for f in clipboard.files.all() if f.original_filename == filename):
-                raise UploadException(self.messages['already-exists'].format(filename))
-
-            matched_file_types = matching_file_subtypes(filename, upload, request)
-
-            FileForm = modelform_factory(
-                model=matched_file_types[0],
-                fields=('original_filename', 'owner', 'file')
-            )
-            uploadform = FileForm({'original_filename': filename,
-                                   'owner': request.user.pk},
-                                  {'file': upload})
-            if uploadform.is_valid():
-                file_obj = uploadform.save(commit=False)
-                # Enforce the FILER_IS_PUBLIC_DEFAULT
-                file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
-                file_obj.save()
-
-                clipboard_item = ClipboardItem(
-                    clipboard=clipboard, file=file_obj)
-                clipboard_item.save()
-
-                json_response = {
-                    'thumbnail': file_obj.icons['32'],
-                    'alt_text': '',
-                    'label': str(file_obj),
-                }
-                return HttpResponse(json.dumps(json_response),
-                                    content_type=mimetype)
-            else:
-                form_errors = '; '.join(['%s: %s' % (
-                    field,
-                    ', '.join(errors)) for field, errors in list(uploadform.errors.items())
-                ])
-                raise UploadException(self.messages['request-invalid'].format(form_errors))
-        except UploadException as exception:
-            return HttpResponse(json.dumps({'error': str(exception)}),
-                                content_type=mimetype)
-        except Exception as error: # no matter the error, we don't return a 500 code
-            logger.exception("[ajax_upload] Unexpected error: %s", str(error))
-            # an error occurred trying to build the file obj and the clipboard item
-            # since they are interconnected, we'll delete both to cleanup
-            if clipboard_item:
-                clipboard_item.file.file.close()
-                clipboard_item.file.file.delete()
-                clipboard_item.delete()
-            return HttpResponse(json.dumps({'error': str(error)}),
-                                content_type=mimetype)
-        finally:
-            if upload:
-                upload.close()
-            if file_obj and file_obj.file:
-                file_obj.file.close()
-
-    def get_model_perms(self, request):
+    def get_model_perms(self, *args, **kwargs):
         """
         It seems this is only used for the list view. NICE :-)
         """
@@ -192,3 +69,128 @@ class ClipboardAdmin(admin.ModelAdmin):
             'change': False,
             'delete': False,
         }
+
+
+@csrf_exempt
+def ajax_upload(request, folder_id=None):
+    """
+    Receives an upload from the uploader. Receives only one file at a time.
+    """
+
+    if not request.user.has_perm("filer.add_file"):
+        messages.error(request, NO_PERMISSIONS)
+        return JsonResponse({'error': NO_PERMISSIONS})
+
+    if folder_id:
+        try:
+            # Get folder
+            folder = Folder.objects.get(pk=folder_id)
+        except Folder.DoesNotExist:
+            messages.error(request, NO_FOLDER_ERROR)
+            return JsonResponse({'error': NO_FOLDER_ERROR})
+    else:
+        folder = Folder.objects.filter(pk=request.session.get('filer_last_folder_id', 0)).first()
+
+    # check permissions
+    if folder and not folder.has_add_children_permission(request):
+        messages.error(request, NO_PERMISSIONS_FOR_FOLDER)
+        return JsonResponse({'error': NO_PERMISSIONS_FOR_FOLDER})
+
+    try:
+        if len(request.FILES) == 1:
+            # don't check if request is ajax or not, just grab the file
+            upload, filename, is_raw, mime_type = handle_request_files_upload(request)
+        else:
+            # else process the request as usual
+            upload, filename, is_raw, mime_type = handle_upload(request)
+    except Exception as e:
+        return JsonResponse({'error': str(e)})
+
+    # Truncate long filenames
+    filename = truncate_filename(upload, maxlen=100)
+    upload.name = filename
+
+    # Re-detect mime_type after truncation may have added an extension
+    import mimetypes as _mimetypes
+    guessed_type = _mimetypes.guess_type(filename)[0]
+    if guessed_type and (
+        mime_type == 'application/octet-stream'
+        or not _mimetypes.guess_all_extensions(mime_type)
+    ):
+        mime_type = guessed_type
+
+
+    # Get clipboard
+    clipboard = Clipboard.objects.get_or_create(user=request.user)[0]
+
+    # Remove any stale clipboard entries with the same filename
+    # (e.g. from previous failed upload attempts) to allow re-upload
+    existing_in_clipboard = clipboard.files.filter(original_filename=filename)
+    if existing_in_clipboard.exists():
+        # Get the actual file pks before clearing the M2M
+        stale_file_pks = list(existing_in_clipboard.values_list('pk', flat=True))
+        ClipboardItem.objects.filter(clipboard=clipboard, file_id__in=stale_file_pks).delete()
+        from ..models import File as FilerFile
+        FilerFile.objects.filter(pk__in=stale_file_pks).delete()
+
+    # find the file type
+    for filer_class in filer_settings.FILER_FILE_MODELS:
+        FileSubClass = load_model(filer_class)
+        # TODO: What if there are more than one that qualify?
+        if FileSubClass.matches_file_type(filename, upload, mime_type):
+            FileForm = modelform_factory(
+                model=FileSubClass,
+                fields=('original_filename', 'owner', 'file')
+            )
+            break
+    uploadform = FileForm({'original_filename': filename, 'owner': request.user.pk},
+                          {'file': upload})
+    uploadform.request = request
+    uploadform.instance.mime_type = mime_type
+    if uploadform.is_valid():
+        try:
+            validate_upload(filename, upload, request.user, mime_type)
+            file_obj = uploadform.save(commit=False)
+            # Enforce the FILER_IS_PUBLIC_DEFAULT
+            file_obj.is_public = filer_settings.FILER_IS_PUBLIC_DEFAULT
+        except ValidationError as error:
+            messages.error(request, str(error))
+            return JsonResponse({'error': str(error)})
+        file_obj.folder = folder
+        try:
+            file_obj.save()
+        except Exception as error:
+            messages.error(request, str(error))
+            return JsonResponse({'error': str(error)})
+        clipboard_item = ClipboardItem(
+            clipboard=clipboard, file=file_obj)
+        clipboard_item.save()
+
+        try:
+            thumbnail = None
+            data = {
+                'thumbnail': thumbnail,
+                'alt_text': '',
+                'label': str(file_obj),
+                'file_id': file_obj.pk,
+            }
+            # prepare preview thumbnail
+            if isinstance(file_obj, Image):
+                data['thumbnail_180'] = reverse(
+                    f"admin:filer_{file_obj._meta.model_name}_fileicon",
+                    args=(file_obj.pk, FILER_THUMBNAIL_ICON_SIZE),
+                )
+                data['original_image'] = file_obj.url
+            return JsonResponse(data)
+        except Exception as error:
+            messages.error(request, str(error))
+            return JsonResponse({"error": str(error)})
+    else:
+        for key, error_list in uploadform.errors.items():
+            for error in error_list:
+                messages.error(request, error)
+
+        form_errors = '; '.join(['{}'.format(
+            ', '.join(errors)) for errors in list(uploadform.errors.values())
+        ])
+        return JsonResponse({'error': str(form_errors)}, status=200)

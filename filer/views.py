@@ -1,4 +1,9 @@
-#-*- coding: utf-8 -*-
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect
+
+
+# --- PBS-specific view helpers ---
+
 def popup_status(request):
     return ('_popup' in request.GET or '_popup' in request.POST
             or 'pop' in request.GET or 'pop' in request.POST)
@@ -21,11 +26,13 @@ def selectfolder_param(request, separator="&"):
     else:
         return ""
 
+
 def current_site_param(request, separator="&"):
     current_site = get_param_from_request(request, 'current_site')
     if current_site:
         return '%scurrent_site=%s' % (separator, current_site)
     return ""
+
 
 def file_type_param(request, separator="&"):
     param = get_param_from_request(request, 'file_type')
@@ -36,3 +43,16 @@ def file_type_param(request, separator="&"):
 
 def get_param_from_request(request, param, default=None):
     return request.POST.get(param) or request.GET.get(param) or default
+
+
+# --- Upstream canonical view ---
+
+def canonical(request, uploaded_at, file_id):
+    """
+    Redirect to the current url of a public file
+    """
+    from .models import File
+    filer_file = get_object_or_404(File, pk=file_id, is_public=True)
+    if (not filer_file.file or int(uploaded_at) != filer_file.canonical_time):
+        raise Http404('No %s matches the given query.' % File._meta.object_name)
+    return redirect(filer_file.url)

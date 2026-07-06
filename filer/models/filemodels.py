@@ -1,37 +1,46 @@
-#-*- coding: utf-8 -*-
 import hashlib
+import mimetypes
 import os
-import filer
 import logging
+from datetime import datetime, timezone
 
+from django.conf import settings
 from django.contrib.auth import models as auth_models
-from django.urls import reverse
-from django.core.files.base import ContentFile
 from django.core.exceptions import ValidationError
-from django.db import (models, IntegrityError, transaction)
-from django.db.models import DEFERRED
+from django.core.files.base import ContentFile
+from django.db import models, IntegrityError, transaction
+from django.db.models import DEFERRED, Count
+from django.urls import NoReverseMatch, reverse
+from django.utils.functional import cached_property
+from django.utils import timezone as django_timezone
 from django.utils.translation import gettext_lazy as _
-from filer.fields.multistorage_file import MultiStorageFileField
-from filer.models import mixins
-from filer.utils.cms_roles import *
-from filer.utils.files import matching_file_subtypes
-from filer import settings as filer_settings
-from filer.utils.cache import invalidate_folder_listing_cache, invalidate_folder_listing_cache_for_file
-from django.db.models import Count
-from django.utils import timezone
 
-from polymorphic.models import PolymorphicModel
 from polymorphic.managers import PolymorphicManager
+from polymorphic.models import PolymorphicModel
 from polymorphic.query import PolymorphicQuerySet
+
+from .. import settings as filer_settings
+from ..fields.multistorage_file import MultiStorageFileField
+from ..utils.cache import invalidate_folder_listing_cache, invalidate_folder_listing_cache_for_file
+from ..utils.cms_roles import (
+    get_sites_without_restriction_perm,
+    has_admin_role,
+    has_role_on_site,
+    can_restrict_on_site,
+)
+from ..utils.files import matching_file_subtypes
+from . import mixins
+
+import filer
 
 logger = logging.getLogger(__name__)
 
 
 def silence_error_if_missing_file(exception):
     """
-    Ugly way of checking in an exception describes a 'missing file'.
+    Ugly way of checking if an exception describes a 'missing file'.
     """
-    missing_files_errs = ('no such file', 'does not exist', )
+    missing_files_errs = ('no such file', 'does not exist',)
 
     def find_msg_in_error(msg):
         return msg in str(exception).lower()
@@ -41,7 +50,12 @@ def silence_error_if_missing_file(exception):
 
 
 class FileQuerySet(PolymorphicQuerySet):
+    def only(self, *fields):
+        fields = set(fields)
+        fields.update(["_file_size", "sha1", "is_public"])
+        return super().only(*fields)
 
+    # PBS-specific querysets
     def readonly(self, user):
         Folder = filer.models.foldermodels.Folder
         return self.filter(folder__folder_type=Folder.CORE_FOLDER)
@@ -69,9 +83,7 @@ class FileQuerySet(PolymorphicQuerySet):
 class FileManager(PolymorphicManager):
     queryset_class = FileQuerySet
 
-    # Proxy all unknown method calls to the queryset, so that its members are
-    # directly accessible as PolymorphicModel.objects.*
-    # Exclude any special functions (__) from this automatic proxying.
+    # Proxy all unknown method calls to the queryset
     def __getattr__(self, name):
         if name.startswith('__'):
             return super(PolymorphicManager, self).__getattr__(self, name)
@@ -82,69 +94,145 @@ class FileManager(PolymorphicManager):
                 for file_data in self.get_queryset().values('sha1').annotate(
                     count=Count('id')).filter(count__gt=1)}
 
+    def find_duplicates(self, file_obj):
+        return [i for i in self.exclude(pk=file_obj.pk).filter(sha1=file_obj.sha1)]
 
+
+# PBS-specific managers for trash system
 class AliveFileManager(FileManager):
-    # this is required in order to make sure that other models that are
-    #   related to filer files will get an DoesNotExist exception if the file
-    #   is in trash
-
     def get_queryset(self):
-        return super(AliveFileManager, self).get_queryset().filter(
-            deleted_at__isnull=True)
+        return super().get_queryset().filter(deleted_at__isnull=True)
 
 
 class TrashFileManager(FileManager):
-
     def get_queryset(self):
-        return super(TrashFileManager, self).get_queryset().filter(
-            deleted_at__isnull=False)
+        return super().get_queryset().filter(deleted_at__isnull=False)
+
+
+def is_public_default():
+    # not using this setting directly as `is_public` default value
+    # so that Django doesn't generate new migrations upon setting change
+    return filer_settings.FILER_IS_PUBLIC_DEFAULT
+
+
+def mimetype_validator(value):
+    if not mimetypes.guess_extension(value):
+        msg = "'{mimetype}' is not a recognized MIME-Type."
+        raise ValidationError(msg.format(mimetype=value))
 
 
 @mixins.trashable
-class File(PolymorphicModel,
-           mixins.IconsMixin):
-
+class File(PolymorphicModel, mixins.IconsMixin):
     file_type = 'File'
-    _icon = "file"
-    folder = models.ForeignKey('filer.Folder', verbose_name=_('folder'), related_name='all_files',
-        null=True, blank=True, on_delete=models.deletion.CASCADE)
-    file = MultiStorageFileField(_('file'), null=True, blank=True, db_index=True, max_length=1024)
-    _file_size = models.IntegerField(_('file size'), null=True, blank=True)
+    _icon = 'file'
+    _file_data_changed_hint = None
 
-    sha1 = models.CharField(_('sha1'), max_length=40, blank=True, default='')
+    folder = models.ForeignKey(
+        'filer.Folder',
+        verbose_name=_("folder"),
+        related_name='all_files',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
 
-    has_all_mandatory_data = models.BooleanField(_('has all mandatory data'), default=False, editable=False)
+    file = MultiStorageFileField(
+        _("file"),
+        null=True,
+        blank=True,
+        db_index=True,
+        max_length=1024,
+    )
 
-    original_filename = models.CharField(_('original filename'), max_length=255, blank=True, null=True)
+    _file_size = models.BigIntegerField(
+        _("file size"),
+        null=True,
+        blank=True,
+    )
+
+    sha1 = models.CharField(
+        _("sha1"),
+        max_length=40,
+        blank=True,
+        default='',
+    )
+
+    has_all_mandatory_data = models.BooleanField(
+        _("has all mandatory data"),
+        default=False,
+        editable=False,
+    )
+
+    original_filename = models.CharField(
+        _("original filename"),
+        max_length=255,
+        blank=True,
+        null=True,
+    )
+
     name = models.CharField(
-        max_length=255, null=True, blank=True, verbose_name=_('file name'),
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name=_("file name"),
         help_text=_('Change the FILE name for an image in the cloud storage'
                     ' system; be sure to include the extension '
                     '(.jpg or .png, for example) to ensure asset remains '
-                    'valid.'))
+                    'valid.'),
+    )
+
     title = models.CharField(
-        max_length=255, null=True, blank=True, verbose_name=_('name'),
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name=_("name"),
         help_text=_('Used in the Photo Gallery plugin as a title or name for'
-                    ' an image; not displayed via the image plugin.'))
+                    ' an image; not displayed via the image plugin.'),
+    )
+
     description = models.TextField(
-        null=True, blank=True, verbose_name=_('description'),
+        null=True,
+        blank=True,
+        verbose_name=_("description"),
         help_text=_('Used in the Photo Gallery plugin as a description;'
-                    ' not displayed via the image plugin.'))
+                    ' not displayed via the image plugin.'),
+    )
 
-    owner = models.ForeignKey(auth_models.User,
-        related_name='owned_%(class)ss', on_delete=models.SET_NULL,
-        null=True, blank=True, verbose_name=_('owner'))
+    owner = models.ForeignKey(
+        getattr(settings, 'AUTH_USER_MODEL', 'auth.User'),
+        related_name='owned_%(class)ss',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("owner"),
+    )
 
-    uploaded_at = models.DateTimeField(_('uploaded at'), auto_now_add=True)
-    modified_at = models.DateTimeField(_('modified at'), auto_now=True)
+    uploaded_at = models.DateTimeField(
+        _("uploaded at"),
+        auto_now_add=True,
+    )
+
+    modified_at = models.DateTimeField(
+        _("modified at"),
+        auto_now=True,
+    )
 
     is_public = models.BooleanField(
         default=filer_settings.FILER_IS_PUBLIC_DEFAULT,
-        verbose_name=_('Permissions disabled'),
-        help_text=_('Disable any permission checking for this ' +\
-                    'file. File will be publicly accessible ' +\
-                    'to anyone.'))
+        verbose_name=_("Permissions disabled"),
+        help_text=_("Disable any permission checking for this "
+                    "file. File will be publicly accessible "
+                    "to anyone."),
+    )
 
+    mime_type = models.CharField(
+        max_length=255,
+        help_text="MIME type of uploaded content",
+        validators=[mimetype_validator],
+        default='application/octet-stream',
+    )
+
+    # PBS-specific: restricted field
     restricted = models.BooleanField(
         _("Restrict Editors and Writers from being able to edit "
           "or delete this asset"), default=False,
@@ -152,12 +240,18 @@ class File(PolymorphicModel,
                     'Editors and Writers will still be able to '
                     'view the asset, add it to a plugin or smart '
                     'snippet but will not be able to delete or '
-                    'modify the current version of the asset.'))
+                    'modify the current version of the asset.'),
+    )
 
-
+    # PBS-specific: trash managers
     objects = AliveFileManager()
     trash = TrashFileManager()
     all_objects = FileManager()
+
+    class Meta:
+        app_label = 'filer'
+        verbose_name = _("file")
+        verbose_name_plural = _("files")
 
     @classmethod
     def matches_file_type(cls, iname, ifile, request):
@@ -170,8 +264,8 @@ class File(PolymorphicModel,
     _UNKNOWN = object()
 
     def __init__(self, *args, **kwargs):
-        super(File, self).__init__(*args, **kwargs)
-        # Use __dict__ to avoid triggering deferred field loading
+        super().__init__(*args, **kwargs)
+        # PBS: Use __dict__ to avoid triggering deferred field loading
         # which can cause recursion in Django 5.1+ (from_db calls __init__).
         raw_is_public = self.__dict__.get('is_public', DEFERRED)
         if raw_is_public is DEFERRED:
@@ -200,6 +294,40 @@ class File(PolymorphicModel,
         raw_folder_id = self.__dict__.get('folder_id', DEFERRED)
         self._old_folder_id = self._UNKNOWN if raw_folder_id is DEFERRED else raw_folder_id
 
+    @cached_property
+    def mime_maintype(self):
+        return self.mime_type.split('/')[0]
+
+    @cached_property
+    def mime_subtype(self):
+        return self.mime_type.split('/')[1]
+
+    def file_data_changed(self, post_init=False):
+        """
+        This is called whenever self.file changes (including initial set in __init__).
+        Returns True if data related attributes were updated, False otherwise.
+        """
+        if self._file_data_changed_hint is not None:
+            data_changed_hint = self._file_data_changed_hint
+            self._file_data_changed_hint = None
+            if not data_changed_hint:
+                return False
+        if post_init and self._file_size and self.sha1:
+            return False
+        try:
+            self._file_size = self.file.size
+        except:   # noqa
+            self._file_size = None
+        try:
+            self.generate_sha1()
+        except Exception:
+            self.sha1 = ''
+        try:
+            self.mime_type = mimetypes.guess_type(self.file.name)[0] or 'application/octet-stream'
+        except Exception:
+            pass
+        return True
+
     def clean(self):
         if self.name:
             self.name = self.name.strip()
@@ -214,7 +342,7 @@ class File(PolymorphicModel,
             old_file_type = self.get_real_instance_class()
             new_file_type = matching_file_subtypes(self.name, None, None)[0]
 
-            if not old_file_type is new_file_type:
+            if old_file_type is not new_file_type:
                 supported_extensions = getattr(
                     old_file_type, '_filename_extensions', [])
                 if supported_extensions:
@@ -224,15 +352,15 @@ class File(PolymorphicModel,
                                 ', '.join(supported_extensions))
                 else:
                     err_msg = "Extension %s is not allowed for this file " \
-                              "type." % (extension, )
+                              "type." % (extension,)
                 raise ValidationError(err_msg)
 
         if self.folder:
             entries = self.folder.entries_with_names([self.actual_name])
             if entries and any(entry.pk != self.pk for entry in entries):
                 raise ValidationError(
-                    _('Current folder already contains a file named %s') % \
-                        self.actual_name)
+                    _('Current folder already contains a file named %s') %
+                    self.actual_name)
 
     def _move_file(self):
         """
@@ -250,29 +378,21 @@ class File(PolymorphicModel,
             dst_storage = self.file.storages['private']
 
         # delete the thumbnail
-        # We are toggling the is_public to make sure that easy_thumbnails can
-        # delete the thumbnails
         self.is_public = not self.is_public
         self.file.delete_thumbnails()
         self.is_public = not self.is_public
-        # This is needed because most of the remote File Storage backend do not
-        # open the file.
         src_file = src_storage.open(src_file_name)
-        src_file.open()
-        self.file = dst_storage.save(dst_file_name,
-            ContentFile(src_file.read(), name=os.path.basename(dst_file_name)))
-        src_file.close()
+        with src_file.open() as f:
+            content_file = ContentFile(f.read())
+        self._file_data_changed_hint = False
+        self.file = dst_storage.save(dst_file_name, content_file)
         src_storage.delete(src_file_name)
 
     def _copy_file(self, destination, overwrite=False):
         """
         Copies the file to a destination files and returns it.
         """
-
         if overwrite:
-            # If the destination file already exists default storage backend
-            # does not overwrite it but generates another filename.
-            # TODO: Find a way to override this behavior.
             raise NotImplementedError
 
         src_file_name = self._current_file_location
@@ -281,14 +401,10 @@ class File(PolymorphicModel,
         if hasattr(storage, 'copy'):
             storage.copy(src_file_name, destination)
         else:
-            # This is needed because most of the remote File Storage backend do not
-            # open the file.
             src_file = storage.open(src_file_name)
             src_file.open()
             file_content = src_file.read()
             src_file.close()
-            # Delete existing file at destination to prevent Django's storage
-            # from deduplicating the filename (appending random suffix).
             if storage.exists(destination):
                 storage.delete(destination)
             destination = storage.save(destination,
@@ -301,11 +417,15 @@ class File(PolymorphicModel,
     def generate_sha1(self):
         sha = hashlib.sha1()
         self.file.seek(0)
-        sha.update(self.file.read())
+        while True:
+            buf = self.file.read(104857600)
+            if not buf:
+                break
+            sha.update(buf)
         self.sha1 = sha.hexdigest()
-        # to make sure later operations can read the whole file
         self.file.seek(0)
 
+    # PBS-specific: set restricted from folder
     def set_restricted_from_folder(self):
         if self.folder and self.folder.restricted:
             self.restricted = self.folder.restricted
@@ -315,14 +435,13 @@ class File(PolymorphicModel,
         # check if this is a subclass of "File" or not and set
         # _file_type_plugin_name
         if self.__class__ == File:
-            # what should we do now?
-            # maybe this has a subclass, but is being saved as a File instance
-            # anyway. do we need to go check all possible subclasses?
             pass
         elif issubclass(self.__class__, File):
             self._file_type_plugin_name = self.__class__.__name__
+        # Ensure file metadata is computed on first save
+        if not self.sha1 and self.file:
+            self.file_data_changed()
         # cache the file size
-        # TODO: only do this if needed (depending on the storage backend the whole file will be downloaded)
         try:
             self._file_size = self.file.size
         except:
@@ -332,10 +451,9 @@ class File(PolymorphicModel,
             self._old_is_public = self.is_public
 
         # generate SHA1 hash
-        # TODO: only do this if needed (depending on the storage backend the whole file will be downloaded)
         try:
             self.generate_sha1()
-        except (IOError, TypeError, ValueError) as e:
+        except (IOError, TypeError, ValueError):
             pass
         replaced_file = (self._old_sha1 is not self._UNKNOWN and
                          self._old_sha1 != self.sha1)
@@ -343,11 +461,11 @@ class File(PolymorphicModel,
         old_folder_id = self._old_folder_id
         if filer_settings.FOLDER_AFFECTS_URL and (self._is_path_changed() or replaced_file):
             if replaced_file and not self._is_name_changed():
-                self.name = None  # if new file submitted for same id we overwrite what was previously in name
+                self.name = None
             self._force_commit = True
             self.update_location_on_storage(*args, **kwargs)
         else:
-            super(File, self).save(*args, **kwargs)
+            super().save(*args, **kwargs)
         # Invalidate cache for the current folder
         invalidate_folder_listing_cache_for_file(self)
         # If file moved between folders, also invalidate the old folder
@@ -374,9 +492,6 @@ class File(PolymorphicModel,
     def _is_path_changed(self):
         """
         Used to detect if file location on storage should be updated or not.
-        Since this is used only to check if location should be updated,
-            the values will be reset after the file is copied in the
-            destination location on storage.
         """
         # If previous values are unknown (deferred), skip change-detection
         # to avoid triggering unnecessary file copies/moves on storage.
@@ -390,7 +505,6 @@ class File(PolymorphicModel,
             name_changed = self._old_name != self.name
 
         folder_changed = self._old_folder_id != getattr(self.folder, 'id', None)
-
         return name_changed or folder_changed
 
     def _delete_thumbnails(self):
@@ -401,10 +515,7 @@ class File(PolymorphicModel,
 
     def update_location_on_storage(self, *args, **kwargs):
         old_location = self._current_file_location
-        # thumbnails might get physically deleted evenif the transaction fails
-        # though luck... they get re-created anyway...
         self._delete_thumbnails()
-        # check if file content has changed
         if self._old_sha1 != self.sha1:
             # actual file content needs to be replaced on storage prior to
             #   filer file instance save
@@ -423,20 +534,13 @@ class File(PolymorphicModel,
         def copy_and_save():
             saved_as = self._copy_file(new_location)
             assert saved_as == new_location, '%s %s' % (saved_as, new_location)
+            self._file_data_changed_hint = False
             self.file = saved_as
             super(File, self).save(*args, **kwargs)
 
         if self._force_commit:
             try:
                 with transaction.atomic(savepoint=False):
-                    # The manual transaction management here breaks the transaction management
-                    # from django.contrib.admin.options.ModelAdmin.change_view
-                    # This isn't a big problem because the only CRUD operation done afterwards
-                    # is an insertion in django_admin_log. If this method rollbacks the transaction
-                    # then we will have an entry in the admin log describing an action
-                    # that didn't actually finish succesfull.
-                    # This 'hack' can be removed once django adds support for on_commit and
-                    # on_rollback hooks (see: https://code.djangoproject.com/ticket/14051)
                     copy_and_save()
             except:
                 # delete the file from new_location if the db update failed
@@ -451,27 +555,12 @@ class File(PolymorphicModel,
             copy_and_save()
         return new_location
 
+    # PBS-specific: soft delete / trash system
     def soft_delete(self, *args, **kwargs):
         """
-        This method works as a default delete action of a filer file.
-        It will not actually delete the item from the database, instead it
-            will make it inaccessible for the default manager.
-        It just `fakes` a deletion by doing the following:
-            1. sets a deletion time that will be used to distinguish
-                `alive` and `trashed` filer files.
-            2. makes a copy of the actual file on storage and saves it to
-                a trash location on storage. Also tries to ignore if the
-                actual file is missing from storage.
-            3. updates only the filer file path in the database (no model
-                save is done since it tries to bypass the logic defined
-                in the save method)
-            4. deletes the file(and all it's thumbnails) from the
-                original location if no other filer files are referencing
-                it.
-        All the metadata of this filer file will remain intact.
+        Soft-delete: moves file to trash location on storage.
         """
-        deletion_time = kwargs.pop('deletion_time', timezone.now())
-        # move file to a `trash` location
+        deletion_time = kwargs.pop('deletion_time', django_timezone.now())
         to_trash = filer.utils.generate_filename.get_trash_path(self)
         old_location, new_location = self.file.name, None
         try:
@@ -482,18 +571,13 @@ class File(PolymorphicModel,
                 logger.error('Error while trying to copy file: %s to %s.' % (
                     old_location, to_trash), e)
         else:
-            # if there are no more references to the file on storage delete it
-            #   and all its thumbnails
             if not File.objects.exclude(pk=self.pk).filter(
                 file=old_location, is_public=self.is_public).exists():
                 self.file.delete(False)
         finally:
-            # even if `copy_file` fails, user is trying to delete this file so
-            #   in worse case scenario this file is not restorable
             new_location = new_location or to_trash
             File.objects.filter(pk=self.pk).update(
                 deleted_at=deletion_time, file=new_location)
-
             self.deleted_at = deletion_time
             self.file = new_location
         # Invalidate cache for the folder this file was in
@@ -501,24 +585,20 @@ class File(PolymorphicModel,
 
     def hard_delete(self, *args, **kwargs):
         """
-        This method deletes the filer file from the database and from storage.
+        Hard-delete: removes from DB and storage.
         """
-        # delete the model before deleting the file from storage
-        super(File, self).delete(*args, **kwargs)
-        # delete the actual file from storage and all its thumbnails
-        #   if there are no other filer files referencing it.
+        super().delete(*args, **kwargs)
         if not File.objects.filter(file=self.file.name,
                                    is_public=self.is_public).exists():
             self.file.delete(False)
 
     def delete(self, *args, **kwargs):
-        super(File, self).delete_restorable(*args, **kwargs)
+        super().delete_restorable(*args, **kwargs)
     delete.alters_data = True
 
     def _set_valid_name_for_restore(self):
         """
-        Generates the first available name so this file
-            can be restored in the folder.
+        Generates the first available name for restore.
         """
         basename, extension = os.path.splitext(self.clean_actual_name)
         if self.folder:
@@ -537,7 +617,6 @@ class File(PolymorphicModel,
         i = 1
         while self.clean_actual_name in existing_file_names:
             filename = "%s_%s%s" % (basename, i, extension)
-            # set actual name
             if self.name in ('', None):
                 self.original_filename = filename
             else:
@@ -546,9 +625,7 @@ class File(PolymorphicModel,
 
     def restore(self):
         """
-            Restores the file to its folder location.
-            If there's already an existing file with the same name, it will
-                generate a new filename.
+        Restores the file to its folder location.
         """
         if self.folder_id:
             Folder = filer.models.foldermodels.Folder
@@ -558,7 +635,6 @@ class File(PolymorphicModel,
                 self.folder = Folder.trash.get(id=self.folder_id)
 
             self.folder.restore_path()
-            # at this point this file's folder should be `alive`
             self.folder = filer.models.Folder.objects.get(id=self.folder_id)
 
         old_location, new_location = self.file.name, None
@@ -580,7 +656,6 @@ class File(PolymorphicModel,
                 name=self.name, original_filename=self.original_filename)
             self.deleted_at = None
             self.file.name = new_location
-            # restore to user clipboard
             if self.owner_id and not self.folder_id:
                 try:
                     clipboard = filer.models.tools.get_user_clipboard(self.owner)
@@ -590,21 +665,28 @@ class File(PolymorphicModel,
         # Invalidate cache for the folder this file was restored to
         invalidate_folder_listing_cache_for_file(self)
 
+    def __str__(self):
+        try:
+            name = self.pretty_logical_path
+        except:
+            name = self.actual_name
+        return name
+
     @property
     def label(self):
         if self.name in ['', None]:
             text = self.original_filename or 'unnamed file'
         else:
             text = self.name
-        text = "%s" % (text,)
-        return text
+        return f"{text}"
 
     def _cmp(self, a, b):
-        return (a > b) - (a < b) 
+        return (a > b) - (a < b)
 
     def __lt__(self, other):
         return self._cmp(self.label.lower(), other.label.lower()) < 0
 
+    # PBS-specific: hash-based actual_name
     @property
     def actual_name(self):
         if not self.sha1:
@@ -638,11 +720,7 @@ class File(PolymorphicModel,
 
     @property
     def clean_actual_name(self):
-        """The name displayed to the user.
-        Uses self.name if set, otherwise it falls back on self.original_filename.
-
-        This property is used for enforcing unique filenames within the same folder.
-        """
+        """The name displayed to the user."""
         if self.name in ('', None):
             name = "%s" % (self.original_filename,)
         else:
@@ -659,41 +737,90 @@ class File(PolymorphicModel,
         full_path = '{}{}{}'.format(directory_path, os.sep, self.actual_name)
         return full_path
 
-    def __str__(self):
-        try:
-            name = self.pretty_logical_path
-        except:
-            name = self.actual_name
-        return name
+    # Upstream: permission methods
+    def has_edit_permission(self, request):
+        return request.user.has_perm("filer.change_file") and self.has_generic_permission(request, 'edit')
 
-    def get_admin_url_path(self):
+    def has_read_permission(self, request):
+        return self.has_generic_permission(request, 'read')
+
+    def has_add_children_permission(self, request):
+        return request.user.has_perm("filer.add_file") and self.has_generic_permission(request, 'add_children')
+
+    def has_generic_permission(self, request, permission_type):
+        user = request.user
+        if not user.is_authenticated:
+            return False
+        elif user.is_superuser:
+            return True
+        elif user == self.owner:
+            return True
+        elif self.folder:
+            return self.folder.has_generic_permission(request, permission_type)
+        else:
+            return False
+
+    def get_admin_url(self, action):
         return reverse(
-            'admin:%s_%s_change' % (self._meta.app_label,
-                                    self._meta.model_name,),
+            'admin:{}_{}_{}'.format(
+                self._meta.app_label,
+                self._meta.model_name,
+                action
+            ),
             args=(self.pk,)
         )
 
+    def get_admin_url_path(self):
+        return self.get_admin_url("change")
+
+    def get_admin_change_url(self):
+        return self.get_admin_url("change")
+
+    def get_admin_expand_view_url(self):
+        return self.get_admin_url("expand")
+
     def get_admin_delete_url(self):
-        return reverse(
-            'admin:{0}_{1}_delete'.format(self._meta.app_label, self._meta.model_name,),
-            args=(self.pk,))
+        return self.get_admin_url("delete")
 
     @property
     def url(self):
         """
         to make the model behave like a file field
         """
+        if self.is_in_trash():
+            return ''
         try:
             r = self.file.url
-        except:
+        except:  # noqa
             r = ''
-        return r
+        from filer.utils.cdn import get_cdn_url
+        return get_cdn_url(self, r)
+
+    @property
+    def canonical_time(self):
+        if settings.USE_TZ:
+            return int((self.uploaded_at - datetime(1970, 1, 1, 1, tzinfo=timezone.utc)).total_seconds())
+        else:
+            return int((self.uploaded_at - datetime(1970, 1, 1, 1)).total_seconds())
+
+    @property
+    def canonical_url(self):
+        url = ''
+        if self.file and self.is_public:
+            try:
+                url = reverse('canonical', kwargs={
+                    'uploaded_at': self.canonical_time,
+                    'file_id': self.id
+                })
+            except NoReverseMatch:
+                pass
+        return url
 
     @property
     def path(self):
         try:
             return self.file.path
-        except:
+        except:  # noqa
             return ""
 
     @property
@@ -709,10 +836,6 @@ class File(PolymorphicModel,
 
     @property
     def logical_folder(self):
-        """
-        if this file is not in a specific folder return the Special "unfiled"
-        Folder object
-        """
         if not self.folder:
             from filer.models.virtualitems import UnfiledImages
             return UnfiledImages()
@@ -721,10 +844,6 @@ class File(PolymorphicModel,
 
     @property
     def logical_path(self):
-        """
-        Gets logical path of the folder in the tree structure.
-        Used to generate breadcrumbs
-        """
         folder_path = []
         if self.folder:
             folder_path.extend(self.folder.get_ancestors())
@@ -735,6 +854,7 @@ class File(PolymorphicModel,
     def duplicates(self):
         return list(File.objects.find_duplicates(self))
 
+    # PBS-specific: site/core permission methods
     def is_core(self):
         if self.folder:
             return self.folder.is_core()
@@ -752,21 +872,14 @@ class File(PolymorphicModel,
             not can_restrict_on_site(user, self.folder.site)))
 
     def can_change_restricted(self, user):
-        """
-        Checks if restriction operation is available for this file.
-        """
         perm = 'filer.can_restrict_operations'
         if not user.has_perm(perm, self) and not user.has_perm(perm):
             return False
         if not self.folder:
-            # cannot restrict unfiled files
             return False
-
         if not can_restrict_on_site(user, self.folder.site):
             return False
-
         if self.folder.restricted == self.restricted == True:
-            # only parent can be set to True
             return False
         if self.folder.restricted == self.restricted == False:
             return True
@@ -778,44 +891,26 @@ class File(PolymorphicModel,
 
     def has_change_permission(self, user):
         if not self.folder:
-            # clipboard and unfiled files
             return True
-
         if self.is_readonly_for_user(user):
-            # nobody can change core folder
-            # leaving these on True based on the fact that core folders are
-            # displayed as readonly fields
             return True
-
-        # only admins can change site folders with no site owner
         if not self.folder.site and has_admin_role(user):
             return True
-
         if self.folder.site:
             can_change_file = (user.has_perm('filer.change_file', self) or
                                user.has_perm('filer.change_file'))
             return can_change_file and has_role_on_site(user, self.folder.site)
-
         return False
 
     def has_delete_permission(self, user):
         if not self.folder:
-             # clipboard and unfiled files
             return True
-        # nobody can delete core files
         if self.is_readonly_for_user(user):
             return False
-        # only admins can delete site files with no site owner
         if not self.folder.site and has_admin_role(user):
             return True
-
         if self.folder.site:
             can_delete_file = (user.has_perm('filer.delete_file', self) or
                                user.has_perm('filer.delete_file'))
             return can_delete_file and has_role_on_site(user, self.folder.site)
         return False
-
-    class Meta:
-        app_label = 'filer'
-        verbose_name = _('file')
-        verbose_name_plural = _('files')

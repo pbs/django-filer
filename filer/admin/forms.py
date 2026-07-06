@@ -1,14 +1,23 @@
 from django import forms
-from django.db import models
 from django.contrib.admin import widgets
-from filer.utils.files import get_valid_filename
-from django.utils.translation import gettext as _
+from django.contrib.admin.helpers import AdminForm
 from django.core.exceptions import ValidationError
-from django.conf import settings
+from django.db import models
+from django.utils.translation import gettext as _
+
+from ..models import ThumbnailOption
+from ..utils.files import get_valid_filename
 
 
-if 'cmsplugin_filer_image' in settings.INSTALLED_APPS:
-    from cmsplugin_filer_image.models import ThumbnailOption
+class WithFieldsetMixin:
+    def get_fieldsets(self):
+        return getattr(self, "fieldsets", [
+            (None, {"fields": [field for field in self.fields]})
+        ])
+
+    def admin_form(self):
+        "Returns a class contains the Admin fieldset to show form as admin form"
+        return AdminForm(self, self.get_fieldsets(), {})
 
 
 class AsPWithHelpMixin(object):
@@ -58,16 +67,16 @@ class AsPWithHelpMixin(object):
 class CopyFilesAndFoldersForm(forms.Form, AsPWithHelpMixin):
     suffix = forms.CharField(required=False, help_text=_("Suffix which will be appended to filenames of copied files."))
     # TODO: We have to find a way to overwrite files with different storage backends first.
-    #overwrite_files = forms.BooleanField(required=False, help_text=_("Overwrite a file if there already exists a file with the same filename?"))
+    # overwrite_files = forms.BooleanField(required=False, help_text=_("Overwrite a file if there already exists a file with the same filename?"))
 
     def clean_suffix(self):
-        valid = get_valid_filename(self.cleaned_data['suffix'])
+        valid = get_valid_filename(self.cleaned_data['suffix']) if self.cleaned_data['suffix'] else ""
         if valid != self.cleaned_data['suffix']:
             raise forms.ValidationError(_('Suffix should be a valid, simple and lowercase filename part, like "%(valid)s".') % {'valid': valid})
         return self.cleaned_data['suffix']
 
 
-class RenameFilesForm(forms.Form, AsPWithHelpMixin):
+class RenameFilesForm(WithFieldsetMixin, forms.Form):
     rename_format = forms.CharField(required=True)
 
     def clean_rename_format(self):
@@ -90,9 +99,20 @@ class RenameFilesForm(forms.Form, AsPWithHelpMixin):
         return self.cleaned_data['rename_format']
 
 
-class ResizeImagesForm(forms.Form, AsPWithHelpMixin):
-    if 'cmsplugin_filer_image' in settings.INSTALLED_APPS:
-        thumbnail_option = models.ForeignKey(ThumbnailOption, null=True, blank=True, verbose_name=_("thumbnail option")).formfield()
+class ResizeImagesForm(WithFieldsetMixin, forms.Form):
+    fieldsets = ((None, {"fields": (
+        "thumbnail_option",
+        ("width", "height"),
+        ("crop", "upscale"))}),)
+
+    thumbnail_option = models.ForeignKey(
+        ThumbnailOption,
+        null=True,
+        blank=True,
+        verbose_name=_("thumbnail option"),
+        on_delete=models.CASCADE,
+    ).formfield()
+
     width = models.PositiveIntegerField(_("width"), null=True, blank=True).formfield(widget=widgets.AdminIntegerFieldWidget)
     height = models.PositiveIntegerField(_("height"), null=True, blank=True).formfield(widget=widgets.AdminIntegerFieldWidget)
     crop = models.BooleanField(_("crop"), default=True).formfield()
@@ -100,8 +120,5 @@ class ResizeImagesForm(forms.Form, AsPWithHelpMixin):
 
     def clean(self):
         if not (self.cleaned_data.get('thumbnail_option') or ((self.cleaned_data.get('width') or 0) + (self.cleaned_data.get('height') or 0))):
-            if 'cmsplugin_filer_image' in settings.INSTALLED_APPS:
-                raise ValidationError(_('Thumbnail option or resize parameters must be choosen.'))
-            else:
-                raise ValidationError(_('Resize parameters must be choosen.'))
+            raise ValidationError(_('Thumbnail option or resize parameters must be choosen.'))
         return self.cleaned_data

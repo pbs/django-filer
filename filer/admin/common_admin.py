@@ -7,8 +7,8 @@ from django.urls import reverse, resolve
 from django.http import HttpResponseRedirect
 
 from filer.models import Folder, File
-from filer.admin.tools import (has_admin_role, has_role_on_site,
-                               has_multi_file_action_permission)
+from filer.utils.cms_roles import has_admin_role, has_role_on_site
+from filer.admin.tools import has_multi_file_action_permission
 from filer.views import (popup_param, selectfolder_param, popup_status,
                          selectfolder_status, current_site_param,
                          get_param_from_request)
@@ -126,7 +126,7 @@ class CommonModelAdmin(admin.ModelAdmin):
             'select_folder': selectfolder_status(request),
         })
         return super(CommonModelAdmin, self).render_change_form(
-            request=request, context=context, add=False,
+            request=request, context=context, add=add,
             change=change, form_url=form_url, obj=obj)
 
     def response_change(self, request, obj):
@@ -147,12 +147,20 @@ class CommonModelAdmin(admin.ModelAdmin):
 class FolderPermissionModelAdmin(CommonModelAdmin):
 
     def has_add_permission(self, request):
-        # allow only make folder view
+        # allow only make folder views
         current_view = resolve(request.path_info).url_name
-        if not current_view == 'filer-directory_listing-make_root_folder':
+        allowed_views = (
+            'filer-directory_listing-make_root_folder',
+            'filer-directory_listing-make_folder',
+        )
+        if current_view not in allowed_views:
             return False
 
         folder_id = get_param_from_request(request, 'parent_id')
+        # Also check URL kwargs for folder_id
+        if not folder_id:
+            resolved = resolve(request.path_info)
+            folder_id = resolved.kwargs.get('folder_id')
         if not folder_id:
             # only site admins and superusers can add root folders
             if has_admin_role(request.user):

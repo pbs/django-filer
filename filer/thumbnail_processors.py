@@ -1,16 +1,18 @@
-#-*- coding: utf-8 -*-
 import re
+
+from easy_thumbnails import processors
+
+from .settings import FILER_SUBJECT_LOCATION_IMAGE_DEBUG, FILER_WHITESPACE_COLOR
+
+
 try:
-    from PIL import Image
-    from PIL import ImageDraw
+    from PIL import Image, ImageDraw
 except ImportError:
     try:
         import Image
         import ImageDraw
     except ImportError:
         raise ImportError("The Python Imaging Library was not found.")
-from easy_thumbnails import processors
-from filer.settings import FILER_SUBJECT_LOCATION_IMAGE_DEBUG
 
 RE_SUBJECT_LOCATION = re.compile(r'^(\d+),(\d+)$')
 
@@ -30,12 +32,13 @@ def normalize_subject_location(subject_location):
 
 
 def scale_and_crop_with_subject_location(im, size, subject_location=False,
-                                         crop=False, upscale=False, **kwargs):
+                                         zoom=None, crop=False, upscale=False,
+                                         **kwargs):
     """
     Like ``easy_thumbnails.processors.scale_and_crop``, but will use the
     coordinates in ``subject_location`` to make sure that that part of the
     image is in the center or at least somewhere on the cropped image.
-    Please not that this does *not* work correctly if the image has been
+    Please note that this does *not* work correctly if the image has been
     resized by a previous processor (e.g ``autocrop``).
 
     ``crop`` needs to be set for this to work, but any special cropping
@@ -44,15 +47,15 @@ def scale_and_crop_with_subject_location(im, size, subject_location=False,
     subject_location = normalize_subject_location(subject_location)
     if not (subject_location and crop):
         # use the normal scale_and_crop
-        return processors.scale_and_crop(im, size, crop=crop,
+        return processors.scale_and_crop(im, size, zoom=zoom, crop=crop,
                                          upscale=upscale, **kwargs)
 
     # for here on we have a subject_location and cropping is on
 
     # --snip-- this is a copy and paste of the first few
     #          lines of ``scale_and_crop``
-    source_x, source_y = [float(v) for v in im.size]
-    target_x, target_y = [float(v) for v in size]
+    source_x, source_y = (float(v) for v in im.size)
+    target_x, target_y = (float(v) for v in size)
 
     if crop or not target_x or not target_y:
         scale = max(target_x / source_x, target_y / source_y)
@@ -65,16 +68,27 @@ def scale_and_crop_with_subject_location(im, size, subject_location=False,
     elif not target_y:
         target_y = source_y * scale
 
+    if zoom:
+        if not crop:
+            target_x = round(source_x * scale)
+            target_y = round(source_y * scale)
+        scale *= (100 + int(zoom)) / 100.0
+
     if scale < 1.0 or (scale > 1.0 and upscale):
-        im = im.resize((int(source_x * scale), int(source_y * scale)),
-                       resample=Image.ANTIALIAS)
+        try:
+            im = im.resize((int(source_x * scale), int(source_y * scale)),
+                           resample=Image.LANCZOS)
+        except AttributeError:  # pragma: no cover
+            im = im.resize((int(source_x * scale), int(source_y * scale)),
+                           resample=Image.ANTIALIAS)
+
     # --endsnip-- begin real code
 
     # ===============================
     # subject location aware cropping
     # ===============================
     # res_x, res_y: the resolution of the possibly already resized image
-    res_x, res_y = [float(v) for v in im.size]
+    res_x, res_y = (float(v) for v in im.size)
 
     # subj_x, subj_y: the position of the subject (maybe already re-scaled)
     subj_x = res_x * float(subject_location[0]) / source_x
@@ -110,10 +124,37 @@ def scale_and_crop_with_subject_location(im, size, subject_location=False,
     if ex or ey:
         crop_box = ((int(tex), int(tey), int(tfx), int(tfy)))
         if FILER_SUBJECT_LOCATION_IMAGE_DEBUG:
-            # draw elipse on focal point for Debugging
+            # draw ellipse on focal point for Debugging
             draw = ImageDraw.Draw(im)
             esize = 10
             draw.ellipse(((subj_x - esize, subj_y - esize),
                           (subj_x + esize, subj_y + esize)), outline="#FF0000")
         im = im.crop(crop_box)
     return im
+
+
+def whitespace(image, size, whitespace=False, whitespace_color=None, **kwargs):
+    if not whitespace:
+        return image
+
+    if whitespace_color is None:
+        whitespace_color = FILER_WHITESPACE_COLOR
+    if whitespace_color is None:
+        whitespace_color = '#fff'
+
+    old_image = image
+    source_x, source_y = image.size
+    target_x, target_y = size
+
+    image = Image.new('RGBA', (target_x, target_y), whitespace_color)
+    if source_x < target_x and source_y < target_y:  # whitespace all around
+        image.paste(old_image, (
+            (target_x - source_x) / 2, (target_y - source_y) / 2))
+    elif source_x < target_x:  # whitespace on top and bottom only
+        image.paste(old_image, ((target_x - source_x) / 2, 0))
+    elif source_y < target_y:  # whitespace on sides only
+        image.paste(old_image, (0, (target_y - source_y) / 2))
+    else:  # no whitespace needed
+        image = old_image
+
+    return image

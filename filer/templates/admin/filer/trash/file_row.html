@@ -12,5 +12,5 @@
     <span class="small">{% trans "Owner" %}: {% firstof file.owner.email file.owner.username "n/a" %}</span>
 </td>
 <td>
-    {% client_timezone file.deleted_at %}
+    {{ file.deleted_at }}
 </td>

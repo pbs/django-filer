@@ -23,9 +23,9 @@ from filer.models import tools
 from filer.tests.helpers import (
     get_user_message, create_superuser, create_folder_structure,
     create_image, move_action,
-    move_to_clipboard_action, paste_clipboard_to_folder, get_dir_listing_url,
+    get_dir_listing_url,
     filer_obj_as_checkox, get_make_root_folder_url, enable_restriction,
-    move_single_file_to_clipboard_action, SettingsOverride
+    SettingsOverride
 )
 from filer.utils.checktrees import TreeChecker
 from filer import settings as filer_settings
@@ -246,56 +246,19 @@ class FilerClipboardAdminUrlsTests(TestCase):
         self.assertEqual(Clipboard.objects.count(), 1)
         clip = Clipboard.objects.get(id=1) # there is(or should be) just one clipboard
         self.assertEqual(clip.files.count(), 1)
-        # upload the same file again. This must fail since the
-        # clipboard can't contain two files with the same name
+        # upload the same file again with a fresh file handle.
+        # The stale clipboard entry should be replaced, not rejected.
+        file_obj2 = dj_files.File(open(self.filename, 'rb'))
         response = self.client.post(
             reverse('admin:filer-ajax_upload'), {
             'Filename': self.image_name,
-            'Filedata': file_obj,
+            'Filedata': file_obj2,
             'jsessionid': self.client.session.session_key, },
             **extra_headers
         )
         self.assertEqual(Image.objects.count(), 1)
-        self.assertIn('error', response.content.decode())
-        errormsg = ClipboardAdmin.messages['already-exists'].format(self.image_name)
-        self.assertIn(errormsg, response.content.decode())
+        self.assertNotIn('error', response.content.decode())
         self.assertEqual(clip.files.count(), 1)
-
-    def test_paste_from_clipboard_no_duplicate_files(self):
-        first_folder = Folder.objects.create(
-            name='first', site=Site.objects.get(id=1))
-
-        def upload():
-            file_obj = dj_files.File(open(self.filename, 'rb'))
-            response = self.client.post(
-                reverse('admin:filer-ajax_upload'),
-                {'Filename': self.image_name, 'Filedata': file_obj,
-                 'jsessionid': self.client.session.session_key, })
-            return Image.objects.all().order_by('-id')[0]
-
-        uploaded_image = upload()
-        self.assertEqual(uploaded_image.original_filename, self.image_name)
-
-        def paste(uploaded_image):
-            # current user should have one clipboard created
-            clipboard = self.superuser.filer_clipboard
-            response = self.client.post(
-                reverse('admin:filer-paste_clipboard_to_folder'),
-                {'folder_id': first_folder.pk,
-                 'clipboard_id': clipboard.pk})
-            return Image.objects.get(pk=uploaded_image.pk)
-
-        pasted_image = paste(uploaded_image)
-        self.assertEqual(pasted_image.folder.pk, first_folder.pk)
-        # upload and paste the same image again
-        second_upload = upload()
-        # second paste failed due to name conflict
-        second_pasted_image = paste(second_upload)
-        clipboard = self.superuser.filer_clipboard
-        # file should remain in clipboard and should not be located in
-        #   destination folder
-        self.assertEqual(clipboard.files.count(), 1)
-        self.assertEqual(second_pasted_image.folder, None)
 
     def test_filer_ajax_upload_file(self):
         self.assertEqual(Image.objects.count(), 0)
@@ -477,24 +440,6 @@ class FilerBulkOperationsTests(BulkOperationsMixin, TestCase):
         bar = Folder.objects.get(pk=bar.pk)
         self.assertEqual(bar.parent.pk, root.pk)
 
-    def test_move_to_clipboard_action(self):
-        # TODO: Test recursive (files and folders tree) move
-
-        self.assertEqual(self.src_folder.files.count(), 1)
-        self.assertEqual(self.dst_folder.files.count(), 0)
-        url = get_dir_listing_url(self.src_folder)
-        response = move_to_clipboard_action(
-            self.client, self.src_folder, [self.image_obj])
-        self.assertEqual(self.src_folder.files.count(), 0)
-        self.assertEqual(self.dst_folder.files.count(), 0)
-        clipboard = Clipboard.objects.get(user=self.superuser)
-        self.assertEqual(clipboard.files.count(), 1)
-        request = HttpRequest()
-        tools.move_files_from_clipboard_to_folder(
-            request, clipboard, self.src_folder)
-        tools.discard_clipboard(clipboard)
-        self.assertEqual(clipboard.files.count(), 0)
-        self.assertEqual(self.src_folder.files.count(), 1)
 
     def test_files_set_public_action(self):
         return
@@ -863,129 +808,7 @@ class BaseTestFolderTypePermissionLayer(object):
             self.client, folders['bar'], f1, [folders['baz1']])
         assert Folder.objects.filter(parent=f1).count() == 0
         f1.delete(to_trash=False)
-        return folders, files
 
-    def _get_clipboard_files(self):
-        clipboard, _ = Clipboard.objects.get_or_create(
-            user=self.user)
-        return clipboard.files
-
-    def test_move_to_clipboard_from_root(self):
-        file_foo = File.objects.create(
-            original_filename='foo', folder=None,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-
-        move_to_clipboard_action(self.client, 'unfiled', [file_foo])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-
-        file_bar = File.objects.create(
-            original_filename='bar', folder=None,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        move_single_file_to_clipboard_action(
-            self.client, 'unfiled', [file_bar])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 2)
-
-    def test_move_to_clipboard_from_site_folders(self):
-        foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
-        file_foo = File.objects.create(
-            original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-
-        move_to_clipboard_action(self.client, None, [foo])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-
-        file_bar = File.objects.create(
-            original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        move_to_clipboard_action(self.client, foo, [file_bar])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-
-        file_baz = File.objects.create(
-            original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        move_single_file_to_clipboard_action(
-            self.client, foo, [file_baz])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 2)
-
-    def test_move_to_clipboard_from_core_folders(self):
-        foo = Folder.objects.create(name='foo',
-                                    folder_type=Folder.CORE_FOLDER)
-        file_foo = File.objects.create(
-            original_filename='foo_file', folder=foo,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-        response, _ = move_to_clipboard_action(self.client, None, [foo])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-        response, _ = move_to_clipboard_action(self.client, foo, [file_foo])
-        # actions are not available if current view is core folder
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-
-        response = move_single_file_to_clipboard_action(
-            self.client, foo, [file_foo])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-
-    def test_move_from_clipboard_to_root(self):
-        bar_file = File.objects.create(
-            original_filename='bar_file',
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        clipboard, _ = Clipboard.objects.get_or_create(
-            user=self.user)
-        clipboard.append_file(bar_file)
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-        response = paste_clipboard_to_folder(
-            self.client, None, clipboard)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-
-    def test_move_from_clipboard_to_core_folders(self):
-        bar_file = File.objects.create(
-            original_filename='bar_file',
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        core_folder = Folder.objects.create(
-            name='foo', folder_type=Folder.CORE_FOLDER)
-        clipboard, _ = Clipboard.objects.get_or_create(
-            user=self.user)
-        clipboard.append_file(bar_file)
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-        response = paste_clipboard_to_folder(
-            self.client, core_folder, clipboard)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-
-    def test_move_from_clipboard_to_site_folders(self):
-        bar_file = File.objects.create(
-            original_filename='bar_file',
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        site_folder = Folder.objects.create(
-            name='foo', site=Site.objects.get(id=1))
-        clipboard, _ = Clipboard.objects.get_or_create(
-            user=self.user)
-        clipboard.append_file(bar_file)
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-        response = paste_clipboard_to_folder(
-            self.client, site_folder, clipboard)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-        self.assertEqual(len(site_folder.files), 1)
 
     def test_message_error_move_root_folder(self):
         site = Site.objects.get(id=1)
@@ -1099,7 +922,6 @@ class BaseTestFolderTypePermissionLayer(object):
         messages = [str(m) for m in response.context['messages']]
         assert any("The selected destination was not valid" in m for m in messages),\
             "Warning message not found in wrong copy response"
-        return folders, files
 
     def test_file_from_core_folder_is_unchangeable(self):
         f1 = Folder.objects.create(name='foo', folder_type=Folder.CORE_FOLDER)
@@ -1316,38 +1138,6 @@ class TestFolderTypePermissionLayerForRegularUser(
         foo = Folder.objects.create(name='foo', parent=foo_root)
         bar = Folder.objects.create(name='bar', site=site)
         return move_action(self.client, foo_root, bar, [foo])
-
-    def test_move_to_clipboard_from_site_folders_for_site_admins(self):
-        self._make_user_site_admin()
-        self_cls = TestFolderTypePermissionLayerForRegularUser
-        super(self_cls, self).test_move_to_clipboard_from_site_folders()
-
-    def test_move_to_clipboard_from_site_folders(self):
-        foo = Folder.objects.create(name='foo', site=Site.objects.get(id=1))
-        file_foo = File.objects.create(
-            original_filename='foo', folder=foo,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-
-        move_to_clipboard_action(self.client, None, [foo])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 0)
-
-        file_bar = File.objects.create(
-            original_filename='bar', folder=foo,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        move_to_clipboard_action(self.client, foo, [file_bar])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 1)
-
-        file_baz = File.objects.create(
-            original_filename='baz', folder=foo,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        move_single_file_to_clipboard_action(
-            self.client, foo, [file_baz])
-        self.assertEqual(
-            self._get_clipboard_files().count(), 2)
 
     def test_error_unallowed_restriction_change(self):
         self._make_user_site_admin()
@@ -1917,49 +1707,6 @@ class TestFrozenAssetsPermissions(TestCase):
         response = self.client.post(get_make_root_folder_url(), post_data)
         self.assertEqual(response.status_code, 403)
 
-    def test_move_from_clipboard_in_restricted(self):
-        bar_file = File.objects.create(
-            original_filename='bar_file',
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'))
-        clipboard, _ = Clipboard.objects.get_or_create(user=self.user)
-        clipboard.append_file(bar_file)
-        response = paste_clipboard_to_folder(
-            self.client, self.folders['foo'], clipboard)
-        self.assertEqual(response.status_code, 403)
-
-    def test_move_from_restricted_to_clipboard(self):
-        clipboard, _ = Clipboard.objects.get_or_create(user=self.user)
-        self.assertEqual(clipboard.files.count(), 0)
-        self.assertEqual(clipboard.clipboarditem_set.count(), 0)
-
-        response, url = move_to_clipboard_action(
-            self.client, self.folders['foo'], [self.files['foo_file']])
-
-        clipboard, _ = Clipboard.objects.get_or_create(user=self.user)
-        self.assertEqual(clipboard.files.count(), 0)
-        self.assertEqual(clipboard.clipboarditem_set.count(), 0)
-        self.assertEqual(
-            File.objects.filter(folder=self.folders['foo']).count(), 2)
-
-        response = move_single_file_to_clipboard_action(
-            self.client, self.folders['foo'], [self.files['foo_file']])
-
-        clipboard, _ = Clipboard.objects.get_or_create(user=self.user)
-        self.assertEqual(clipboard.files.count(), 0)
-        self.assertEqual(clipboard.clipboarditem_set.count(), 0)
-        self.assertEqual(
-            File.objects.filter(folder=self.folders['foo']).count(), 2)
-
-    def test_move_restricted_to_clipboard(self):
-        bar = Folder.objects.create(
-            name='bar', site=self.site)
-        bar_file = File.objects.create(
-            original_filename='bar_file', restricted=True,
-            file=dj_files.base.ContentFile(b'some data', name='data.bin'), folder=bar)
-        response = move_single_file_to_clipboard_action(
-            self.client, bar, [bar_file])
-        self.assertEqual(response.status_code, 403)
-
     def test_move_in_restricted(self):
         bar = Folder.objects.create(name='bar', site=self.site)
         bar_subfolder = Folder.objects.create(
@@ -2231,18 +1978,6 @@ class TestSharedSitePermissions(TestCase):
             helpers.ACTION_CHECKBOX_NAME:
                 [filer_obj_as_checkox(bar_zippy)]})
         assert Folder.objects.get(id=self.bar.id).files.count() == 1
-
-    def test_move_to_clipboard_from_shared_folder(self):
-        bar_file = File.objects.create(
-            original_filename='bar_file.txt', folder=self.bar,
-            file=dj_files.base.ContentFile(b'file', name='file.bin'))
-        response = move_to_clipboard_action(
-            self.client, self.bar, [bar_file])
-        self.assertEqual(Clipboard.objects.all().get().files.count(), 0)
-        move_single_file_to_clipboard_action(
-            self.client, self.bar, [bar_file])
-        self.assertEqual(Clipboard.objects.all().get().files.count(), 0)
-
 
 class TestSharedFolderFunctionality(TestCase):
     """

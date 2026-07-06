@@ -107,11 +107,13 @@ class Archive(File):
         file. It first creates the parent folder of the selected file if it
         does not already exist, similair to mkdir -p.
         """
+        import posixpath
         zippy = zipfile.ZipFile(filer_file)
         entries = zippy.infolist()
         for entry in entries:
             full_path = to_unicode(entry.filename)
-            filename = os.path.basename(full_path)
+            # Use posixpath since zip files always use '/' as separator
+            filename = posixpath.basename(full_path)
             parent_dir = self._create_parent_folders(full_path)
             if filename:
                 data = zippy.read(entry)
@@ -119,9 +121,12 @@ class Archive(File):
 
     def _create_parent_folders(self, full_path):
         """Creates the folder parents for a given entry."""
-        dir_parents_of_entry = full_path.split(os.sep)[:-1]
+        # Zip files always use '/' as path separator, regardless of OS
+        dir_parents_of_entry = full_path.replace('\\', '/').split('/')[:-1]
         parent_dir = self.folder
         for directory_name in dir_parents_of_entry:
+            if not directory_name:
+                continue
             parent_dir = self._create_folder(
                 directory_name, parent_dir)
         return parent_dir
@@ -156,8 +161,10 @@ class Archive(File):
 
     def _create_file(self, basename, folder, data):
         """Helper wrapper of creating a filer file."""
+        import mimetypes
         file_data = ContentFile(data, name=basename)
-        matched_file_types = matching_file_subtypes(basename, None, None)
+        mime_type = mimetypes.guess_type(basename)[0]
+        matched_file_types = matching_file_subtypes(basename, None, mime_type)
         FileSubClass = matched_file_types[0]
         if (FileSubClass is FilerImage and
                 not self._is_valid_image(file_data)):

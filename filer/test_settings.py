@@ -60,6 +60,12 @@ if importlib.util.find_spec('sekizai') is not None:
 
 CACHE_BACKEND = 'locmem:///'
 
+FILER_FILE_MODELS = (
+    'filer.Image',
+    'filer.Archive',
+    'filer.File',
+)
+
 SECRET_KEY = 'secret'
 TEST_RUNNER = 'django.test.runner.DiscoverRunner'
 

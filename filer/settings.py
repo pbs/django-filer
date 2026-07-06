@@ -1,44 +1,73 @@
-#-*- coding: utf-8 -*-
+import logging
 import os
 
 from django.conf import settings
-from django.utils.module_loading import import_string
+from django.utils.module_loading import import_string as get_storage_class
+from django.utils.translation import gettext_lazy as _
 
-from filer.utils.loader import load_object
-from filer.utils.recursive_dictionary import RecursiveDictionaryWithExcludes
+from .utils.loader import load_object
+from .utils.recursive_dictionary import RecursiveDictionaryWithExcludes
 
 
-FILER_DEBUG = getattr(settings, 'FILER_DEBUG', False) # When True makes
+logger = logging.getLogger(__name__)
+
+# FILER_IMAGE_MODEL setting is used to swap Image model.
+# If such global setting does not exist, it will be created at this point (with default model name).
+# This is needed especially when using this setting in migrations.
+if not hasattr(settings, 'FILER_IMAGE_MODEL'):
+    setattr(settings, 'FILER_IMAGE_MODEL', 'filer.Image')
+FILER_IMAGE_MODEL = settings.FILER_IMAGE_MODEL
+
+FILER_DEBUG = getattr(settings, 'FILER_DEBUG', False)  # When True makes
 FILER_SUBJECT_LOCATION_IMAGE_DEBUG = getattr(settings, 'FILER_SUBJECT_LOCATION_IMAGE_DEBUG', False)
+FILER_WHITESPACE_COLOR = getattr(settings, 'FILER_WHITESPACE_COLOR', '#FFFFFF')
 
 FILER_0_8_COMPATIBILITY_MODE = getattr(settings, 'FILER_0_8_COMPATIBILITY_MODE', False)
 
 FILER_ENABLE_LOGGING = getattr(settings, 'FILER_ENABLE_LOGGING', False)
 if FILER_ENABLE_LOGGING:
-    FILER_ENABLE_LOGGING = (FILER_ENABLE_LOGGING and (getattr(settings, 'LOGGING') and
-                                                      ('' in settings.LOGGING['loggers'] or
-                                                       'filer' in settings.LOGGING['loggers'])))
+    FILER_ENABLE_LOGGING = (
+        FILER_ENABLE_LOGGING and (getattr(settings, 'LOGGING')
+                             and ('' in settings.LOGGING['loggers']
+                             or 'filer' in settings.LOGGING['loggers'])))
 
+# PBS-specific: nohash rootfolders
 FILER_NOHASH_ROOTFOLDERS = getattr(settings, 'FILER_NOHASH_ROOTFOLDERS', [])
+
 FILER_ENABLE_PERMISSIONS = getattr(settings, 'FILER_ENABLE_PERMISSIONS', False)
+FILER_ALLOW_REGULAR_USERS_TO_ADD_ROOT_FOLDERS = getattr(settings, 'FILER_ALLOW_REGULAR_USERS_TO_ADD_ROOT_FOLDERS', False)
 FILER_IS_PUBLIC_DEFAULT = getattr(settings, 'FILER_IS_PUBLIC_DEFAULT', True)
 
-FILER_PAGINATE_BY = getattr(settings, 'FILER_PAGINATE_BY', 20)
+FILER_PAGINATE_BY = getattr(settings, 'FILER_PAGINATE_BY', 100)
+
+if hasattr(settings, "FILER_ADMIN_ICON_SIZES"):
+    logger.warning("FILER_ADMIN_ICON_SIZES is deprecated and will be removed in the future.")
+
+_ICON_SIZES = getattr(settings, 'FILER_ADMIN_ICON_SIZES', ('16', '32', '48', '64'))
+# Reliably sort by integer value, but keep icon size as string.
+FILER_ADMIN_ICON_SIZES = [str(i) for i in sorted([int(s) for s in _ICON_SIZES])]
+
+# PBS legacy compat
 FILER_STATICMEDIA_PREFIX = getattr(settings, 'FILER_STATICMEDIA_PREFIX', None)
 if not FILER_STATICMEDIA_PREFIX:
     FILER_STATICMEDIA_PREFIX = (getattr(settings, 'STATIC_URL', None) or settings.MEDIA_URL) + 'filer/'
 
-FILER_ADMIN_ICON_SIZES = getattr(settings, "FILER_ADMIN_ICON_SIZES", ('32',))
+# Currently, these two icon sizes are hard-coded into the admin and admin templates
+FILER_TABLE_ICON_SIZE = getattr(settings, "FILER_TABLE_ICON_SIZE", 40)
+FILER_THUMBNAIL_ICON_SIZE = getattr(settings, "FILER_THUMBNAIL_ICON_SIZE", 120)
+DEFERRED_THUMBNAIL_SIZES = (
+    FILER_TABLE_ICON_SIZE,
+    2 * FILER_TABLE_ICON_SIZE,
+    FILER_THUMBNAIL_ICON_SIZE,
+    2 * FILER_THUMBNAIL_ICON_SIZE,
+)
+
 
 # This is an ordered iterable that describes a list of
 # classes that I should check for when adding files
-FILER_FILE_MODELS = getattr(settings, 'FILER_FILE_MODELS',
-    (
-        'filer.models.imagemodels.Image',
-        'filer.models.archivemodels.Archive',
-        'filer.models.filemodels.File',
-    )
-)
+FILER_FILE_MODELS = getattr(
+    settings, 'FILER_FILE_MODELS',
+    (FILER_IMAGE_MODEL, 'filer.Archive', 'filer.File'))
 
 _FALLBACK_STORAGE_BACKEND = 'django.core.files.storage.FileSystemStorage'
 
@@ -46,7 +75,7 @@ if hasattr(settings, "STORAGES") and 'default' in settings.STORAGES:
     DEFAULT_FILE_STORAGE = settings.STORAGES['default'].get('BACKEND', _FALLBACK_STORAGE_BACKEND)
 else:
     DEFAULT_FILE_STORAGE = getattr(settings, 'DEFAULT_FILE_STORAGE', _FALLBACK_STORAGE_BACKEND)
-    # Django 5.1+ removed the legacy DEFAULT_FILE_STORAGE setting and relies
+    # PBS: Django 5.1+ removed the legacy DEFAULT_FILE_STORAGE setting and relies
     # exclusively on STORAGES['default'].  If the host project (e.g. bento)
     # defines STORAGES without a 'default' key, Django's internal
     # default_storage lookup will raise InvalidStorageError.  Inject the
@@ -61,23 +90,23 @@ MINIMAL_FILER_STORAGES = {
         'main': {
             'ENGINE': None,
             'OPTIONS': {},
-            },
+        },
         'thumbnails': {
             'ENGINE': None,
             'OPTIONS': {},
-            }
+        }
     },
     'private': {
         'main': {
             'ENGINE': None,
             'OPTIONS': {},
-            },
+        },
         'thumbnails': {
             'ENGINE': None,
             'OPTIONS': {},
-            },
         },
-    }
+    },
+}
 
 
 DEFAULT_FILER_STORAGES = {
@@ -180,26 +209,30 @@ else:
 
 FILER_STORAGES.rec_update(user_filer_storages)
 
+
 def update_storage_settings(user_settings, defaults, s, t):
     if not user_settings[s][t]['ENGINE']:
         user_settings[s][t]['ENGINE'] = defaults[s][t]['ENGINE']
         user_settings[s][t]['OPTIONS'] = defaults[s][t]['OPTIONS']
     if t == 'main':
-        if not 'UPLOAD_TO' in user_settings[s][t]:
+        if 'UPLOAD_TO' not in user_settings[s][t]:
             user_settings[s][t]['UPLOAD_TO'] = defaults[s][t]['UPLOAD_TO']
-        if not 'UPLOAD_TO_PREFIX' in user_settings[s][t]:
+        if 'UPLOAD_TO_PREFIX' not in user_settings[s][t]:
             user_settings[s][t]['UPLOAD_TO_PREFIX'] = defaults[s][t]['UPLOAD_TO_PREFIX']
     if t == 'thumbnails':
-        if not 'THUMBNAIL_OPTIONS' in user_settings[s][t]:
+        if 'THUMBNAIL_OPTIONS' not in user_settings[s][t]:
             user_settings[s][t]['THUMBNAIL_OPTIONS'] = defaults[s][t]['THUMBNAIL_OPTIONS']
     return user_settings
 
-for s in ['public', 'private']:
-    for t in ['main', 'thumbnails']:
-        update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, s, t)
+
+update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'public', 'main')
+update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'public', 'thumbnails')
+update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'private', 'main')
+update_storage_settings(FILER_STORAGES, DEFAULT_FILER_STORAGES, 'private', 'thumbnails')
 
 FILER_SERVERS = RecursiveDictionaryWithExcludes(MINIMAL_FILER_SERVERS, rec_excluded_keys=('OPTIONS',))
 FILER_SERVERS.rec_update(getattr(settings, 'FILER_SERVERS', {}))
+
 
 def update_server_settings(settings, defaults, s, t):
     if not settings[s][t]['ENGINE']:
@@ -207,20 +240,16 @@ def update_server_settings(settings, defaults, s, t):
         settings[s][t]['OPTIONS'] = defaults[s][t]['OPTIONS']
     return settings
 
-for t in ['main', 'thumbnails']:
-    update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', t)
 
-# Storage class loader (Django 5.1+)
-def get_storage_class(path):
-    return import_string(path)
+update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', 'main')
+update_server_settings(FILER_SERVERS, DEFAULT_FILER_SERVERS, 'private', 'thumbnails')
+
 
 # Public media (media accessible without any permission checks)
 FILER_PUBLICMEDIA_STORAGE = get_storage_class(FILER_STORAGES['public']['main']['ENGINE'])(**FILER_STORAGES['public']['main']['OPTIONS'])
 FILER_PUBLICMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['public']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['public']['main']:
-    FILER_PUBLICMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(
-        FILER_PUBLICMEDIA_UPLOAD_TO, FILER_STORAGES['public']['main']['UPLOAD_TO_PREFIX']
-    )
+    FILER_PUBLICMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(FILER_PUBLICMEDIA_UPLOAD_TO, FILER_STORAGES['public']['main']['UPLOAD_TO_PREFIX'])
 FILER_PUBLICMEDIA_THUMBNAIL_STORAGE = get_storage_class(FILER_STORAGES['public']['thumbnails']['ENGINE'])(**FILER_STORAGES['public']['thumbnails']['OPTIONS'])
 FILER_PUBLICMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['public']['thumbnails']['THUMBNAIL_OPTIONS']
 
@@ -229,55 +258,107 @@ FILER_PUBLICMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['public']['thumbnails']['TH
 FILER_PRIVATEMEDIA_STORAGE = get_storage_class(FILER_STORAGES['private']['main']['ENGINE'])(**FILER_STORAGES['private']['main']['OPTIONS'])
 FILER_PRIVATEMEDIA_UPLOAD_TO = load_object(FILER_STORAGES['private']['main']['UPLOAD_TO'])
 if 'UPLOAD_TO_PREFIX' in FILER_STORAGES['private']['main']:
-    FILER_PRIVATEMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(
-        FILER_PRIVATEMEDIA_UPLOAD_TO, FILER_STORAGES['private']['main']['UPLOAD_TO_PREFIX']
-    )
+    FILER_PRIVATEMEDIA_UPLOAD_TO = load_object('filer.utils.generate_filename.prefixed_factory')(FILER_PRIVATEMEDIA_UPLOAD_TO, FILER_STORAGES['private']['main']['UPLOAD_TO_PREFIX'])
 FILER_PRIVATEMEDIA_THUMBNAIL_STORAGE = get_storage_class(FILER_STORAGES['private']['thumbnails']['ENGINE'])(**FILER_STORAGES['private']['thumbnails']['OPTIONS'])
 FILER_PRIVATEMEDIA_THUMBNAIL_OPTIONS = FILER_STORAGES['private']['thumbnails']['THUMBNAIL_OPTIONS']
 FILER_PRIVATEMEDIA_SERVER = load_object(FILER_SERVERS['private']['main']['ENGINE'])(**FILER_SERVERS['private']['main']['OPTIONS'])
 FILER_PRIVATEMEDIA_THUMBNAIL_SERVER = load_object(FILER_SERVERS['private']['thumbnails']['ENGINE'])(**FILER_SERVERS['private']['thumbnails']['OPTIONS'])
 
+# By default limit number of simultaneous uploads if we are using SQLite
+if settings.DATABASES['default']['ENGINE'].endswith('sqlite3'):
+    _uploader_connections = 1
+else:
+    _uploader_connections = 3
+FILER_UPLOADER_CONNECTIONS = getattr(
+    settings, 'FILER_UPLOADER_CONNECTIONS', _uploader_connections)
+FILER_UPLOADER_MAX_FILES = getattr(
+    settings, 'FILER_UPLOADER_MAX_FILES', 100)
+FILER_UPLOADER_MAX_FILE_SIZE = getattr(
+    settings, 'FILER_UPLOADER_MAX_FILE_SIZE', None)
+
+
+FILER_DUMP_PAYLOAD = getattr(settings, 'FILER_DUMP_PAYLOAD', False)
+
+FILER_CANONICAL_URL = getattr(settings, 'FILER_CANONICAL_URL', 'canonical/')
+
+TABLE_LIST_TYPE = 'tb'
+THUMBNAIL_LIST_TYPE = 'th'
+FILER_FOLDER_ADMIN_LIST_TYPE_CHOICES = (
+    TABLE_LIST_TYPE,
+    THUMBNAIL_LIST_TYPE,
+)
+FILER_FOLDER_ADMIN_DEFAULT_LIST_TYPE = getattr(settings, 'FILER_FOLDER_ADMIN_DEFAULT_LIST_TYPE', TABLE_LIST_TYPE)
+if FILER_FOLDER_ADMIN_DEFAULT_LIST_TYPE not in FILER_FOLDER_ADMIN_LIST_TYPE_CHOICES:
+    FILER_FOLDER_ADMIN_DEFAULT_LIST_TYPE = TABLE_LIST_TYPE
+
+FILER_FOLDER_ADMIN_LIST_TYPE_SWITCHER_SETTINGS = {
+    TABLE_LIST_TYPE: {
+        'icon': 'th-list',
+        'tooltip_text': _('Show table view'),
+        'template': 'admin/filer/folder/directory_table_list.html',
+    },
+    THUMBNAIL_LIST_TYPE: {
+        'icon': 'th-large',
+        'tooltip_text': _('Show thumbnail view'),
+        'template': 'admin/filer/folder/directory_thumbnail_list.html',
+    },
+}
+
+IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+IMAGE_MIME_TYPES = ['gif', 'jpeg', 'png', 'x-png', 'svg+xml', 'webp']
+
+FILE_VALIDATORS = {
+    "text/html": ["filer.validation.deny_html"],
+    "image/svg+xml": ["filer.validation.validate_svg"],
+    "application/octet-stream": ["filer.validation.deny"],
+}
+
+remove_mime_types = getattr(settings, "FILER_REMOVE_FILE_VALIDATORS", [])
+for mime_type in remove_mime_types:  # pragma: no cover
+    if mime_type in FILE_VALIDATORS:
+        del FILE_VALIDATORS[mime_type]
+
+for mime_type, validators in getattr(settings, "FILER_ADD_FILE_VALIDATORS", {}).items():  # pragma: no cover
+    if mime_type in FILE_VALIDATORS:
+        FILE_VALIDATORS[mime_type] += list(validators)
+    else:
+        FILE_VALIDATORS[mime_type] = list(validators)
+
+FILER_MIME_TYPE_WHITELIST = getattr(settings, "FILER_MIME_TYPE_WHITELIST", [])
+
+
+# Determine if django CMS is installed and if it comes with its own iconset
+ICON_CSS_LIB = ("filer/css/admin_filer.fa.icons.css",)
+if "cms" in settings.INSTALLED_APPS:  # pragma: no cover
+    try:
+        from cms import __version__
+        from cms.utils.urlutils import static_with_version
+
+        if __version__ >= "4":
+            ICON_CSS_LIB = (
+                static_with_version("cms/css/cms.admin.css"),
+                "filer/css/admin_filer.cms.icons.css",
+            )
+    except (ModuleNotFoundError, ImportError):
+        pass
+
+# SVG are their own thumbnails if their size is below this limit
+FILER_MAX_SVG_THUMBNAIL_SIZE = getattr(settings, "FILER_MAX_SVG_THUMBNAIL_SIZE", 1024 * 1024)  # 1MB default
+
+# --- PBS-specific settings ---
+
+# PBS: folder structure affects the URL of files on storage
 FOLDER_AFFECTS_URL = getattr(settings, 'FILER_FOLDER_AFFECTS_URL', False)
+
+# PBS: CDN settings
 CDN_DOMAIN = getattr(settings, 'FILER_CDN_DOMAIN', None)
 CDN_INVALIDATION_TIME = getattr(settings, 'FILER_CDN_INVALIDATION_TIME', 0)
+
+# PBS: Trash settings
 FILER_TRASH_PREFIX = getattr(settings, 'FILER_TRASH_PREFIX', '_trash')
-# defaults to one day
-FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 * 60 * 24)
+FILER_TRASH_CLEAN_INTERVAL = getattr(settings, 'FILER_TRASH_CLEAN_INTERVAL', 60 * 60 * 24)  # defaults to one day
 
-
-# Roles Manager that controles how the filer checks permissions
-# Must be a callable or a the absolute path of the callable as a string.
-# Calling this manager should return an object that must define these functions:
-#
-# def is_site_admin(user):
-#     """
-#     :param user: django.contrib.auth.models.User to check permissions for
-#     :return: True if the user is an admin on any site, False otherwise
-#     """
-#     pass
-
-# def has_perm_on_site(user, site_id, perm):
-#     """
-#     :param user: django.contrib.auth.models.User to check permissions for
-#     :param site_id: id of django.contrib.sites.models.Site
-#                     on which the user must have the permission
-#     :param perm: full name (<app_label>.<permission>) of the permission, ex: filer.add_file
-#     :return: True if the user has the permission on that site, False otherwise
-#     """
-#     pass
-
-# def get_accessible_sites(user):
-#     """
-#     :return: list of django.contrib.sites.models.Site IDs on which the user has access.
-#     """
-#     pass
-
-# def get_administered_sites(user):
-#     """
-#     :return: list of django.contrib.sites.models.Site objects on which the user has admin access.
-#     """
-#     pass
-
+# PBS: Roles Manager that controls how the filer checks permissions
 _default_roles_manager = 'cmsroles.siteadmin.FilerRolesManager'
 try:
     import cmsroles  # noqa: F401

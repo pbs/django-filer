@@ -1,0 +1,12 @@
+/*!
+* Mediator.js Library v0.11.0
+* https://github.com/ajacksified/Mediator.js
+*
+* Copyright 2018, Jack Lawson
+* MIT Licensed (http://www.opensource.org/licenses/mit-license.php)
+*
+* For more information: http://thejacklawson.com/2011/06/mediators-for-modularized-asynchronous-programming-in-javascript/index.html
+* Project on GitHub: https://github.com/ajacksified/Mediator.js
+*
+* Last update: 22 Mar 2018
+*/

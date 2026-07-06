@@ -12,6 +12,9 @@ def get_cdn_url(file_obj, url):
     if cdn_domain is None:
         return url
 
+    if file_obj.modified_at is None:
+        return url
+
     invalidated_at = file_obj.modified_at + datetime.timedelta(
         seconds=filer_settings.CDN_INVALIDATION_TIME)
     # django uses django.utils.timezone.now() to set value for

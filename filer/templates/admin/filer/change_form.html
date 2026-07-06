@@ -1,78 +1,36 @@
 {% extends "admin/change_form.html" %}
-{% load i18n admin_modify filermedia filer_admin_tags %}
-
-{% block extrahead %}{{ block.super }}
-<script type="text/javascript">
-(function($) {
-$( document ).ready(function() {
-	$('.field-restricted').not(':has(input)').addClass('field-restricted-read-only');
-});
-})(django.jQuery);
-</script>
-{% endblock %}
-
-{% block pretitle %}
-{% if is_popup %}
-<a href="{% if original.folder %}{{original.folder.get_admin_directory_listing_url_path}}{% get_popup_params %}{% endif %}" title="{% trans "Go back to the parent folder" %}" onclick="history.go(-1);return false" class="go-back pull-left"><i class="ace-icon fa fa-long-arrow-left bigger-220"></i></a>
-{% endif %}
-{% endblock %}
+{% load i18n admin_modify static filer_admin_tags %}
 
 {% block breadcrumbs %}
-{% with original as instance %}
-{% include "admin/filer/breadcrumbs.html" %}
-{% endwith %}
+    {% with original as instance %}
+        {% include "admin/filer/breadcrumbs.html" %}
+    {% endwith %}
 {% endblock %}
 
 {% block extrastyle %}
-	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.min.css" />
-    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}admin/libs/bootstrap/css/bootstrap.css" />
-    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}admin/libs/ace/css/ace.min.css" />
-    <link href="//fonts.googleapis.com/css?family=Open+Sans:400,300" type="text/css" media="all" rel="stylesheet" />
-    <link rel="stylesheet" type="text/css" href="{{ STATIC_URL }}filer/css/admin_style.css" />
+    {{ block.super }}
+    <link rel="stylesheet" type="text/css" href="{% static 'filer/css/admin_filer.css' %}">
+    {% icon_css_library %}
 {% endblock %}
 
-{% block coltype %}colMS row{% endblock %}
 
 {% block after_field_sets %}
-    {% if is_popup and select_folder %}<input type="hidden" name="select_folder" value="1" />{% endif %}
-{% endblock %}
-
-{% block field_sets %}
-	{% for fieldset in adminform %}
-	  {% include "admin/filer/fieldset.html" %}
-	{% endfor %}
-{% endblock %}
-
-
-{% block content %}
-	<div class="no-padding-right col-lg-10 col-md-9 col-xs-12">
-		{{block.super}}
-	</div>
-{% endblock %}
-
-{% block object-tools %}
-{% if change %}{% if not is_popup %}
-  <ul class="object-tools list-unstyled list-inline text-right">
-      <li><a href="history/" class="historylink btn btn-warning btn-sm"><i class="ace-icon fa fa-clock-o"></i>{% trans "History" %}</a></li>
-  </ul>
-{% endif %}{% endif %}
+    {% filer_admin_context_hidden_formfields %}
 {% endblock %}
 
 {% block sidebar %}
-	{% with original.duplicates as duplicates %}
-		{% if duplicates %}
-		<div id="content-related" class="col-lg-2 col-md-3 col-xs-12 well">
-			<h3>{% trans 'duplicates' %}</h3>
-			<ul>
-				{% for duplicate in duplicates %}<li><a href="{{ duplicate.get_admin_url_path }}{% get_popup_params %}">{{ duplicate }}</a></li>{% endfor %}
-			</ul>
-		</div>
-		{% endif %}
-	{% endwith %}
-{% endblock %}
-
-{% block submit_buttons_bottom %}
-    {% if not original|is_restricted_for_user:user %}
-	{% submit_row %}
-    {% endif %}
+    {% block file_sidebar %}
+        {% with original.duplicates as duplicates %}
+            {% if duplicates %}
+                <div class="file-duplicates">
+                    <h3>{% translate "Duplicates" %}</h3>
+                    <ul>
+                        {% for duplicate in duplicates %}
+                            <li><a href="{{ duplicate.get_admin_change_url }}">{{ duplicate }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+    {% endblock %}
 {% endblock %}
